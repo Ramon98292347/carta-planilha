@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+﻿import { useState, useMemo, useEffect } from "react";
 import { useSheetData } from "@/hooks/useSheetData";
 import { ConnectionPanel } from "@/components/ConnectionPanel";
 import { MetricCards } from "@/components/MetricCards";
@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Loader2, Link2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
 const CARTAS_DETAIL_FIELDS = [
   { key: "regiao", label: "Qual região Pertence" },
@@ -43,6 +44,12 @@ const Index = () => {
   const [deleteApiUrlInput, setDeleteApiUrlInput] = useState(() => localStorage.getItem("DELETE_API_URL") || "");
   const [deleteApiKeyInput, setDeleteApiKeyInput] = useState(() => localStorage.getItem("DELETE_API_KEY") || "");
   const [showDeleteKey, setShowDeleteKey] = useState(false);
+  const [showDeleteConfig, setShowDeleteConfig] = useState(false);
+  const hasDeleteConfig = deleteApiUrlInput.trim().length > 0 && deleteApiKeyInput.trim().length > 0;
+
+  useEffect(() => {
+    if (connected) setShowDeleteKey(false);
+  }, [connected]);
 
   const filteredCartas = useMemo(() => {
     return cartas.filter((row) => {
@@ -208,38 +215,69 @@ const Index = () => {
             </div>
 
             <div className="rounded-lg border bg-card p-4 shadow-sm">
-              <h3 className="text-sm font-semibold">Exclusão (API Delete)</h3>
-              <p className="mt-1 text-xs text-muted-foreground">Configure a integração de exclusão das cartas.</p>
-
-              <div className="mt-3 space-y-2">
-                <Input
-                  value={deleteApiUrlInput}
-                  onChange={(e) => setDeleteApiUrlInput(e.target.value)}
-                  placeholder="API Delete URL (Web App)"
-                />
-                <div className="flex gap-2">
-                  <Input
-                    type={showDeleteKey ? "text" : "password"}
-                    value={deleteApiKeyInput}
-                    onChange={(e) => setDeleteApiKeyInput(e.target.value)}
-                    placeholder="API Delete KEY"
-                  />
-                  <Button type="button" variant="outline" onClick={() => setShowDeleteKey((v) => !v)}>
-                    {showDeleteKey ? "Ocultar" : "Mostrar"}
-                  </Button>
-                </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
+                  <h3 className="text-sm font-semibold">Exclusão (API Delete)</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">Configure a integração de exclusão das cartas.</p>
+                </div>
+                <div className="flex items-center gap-2">
                   <Button
                     type="button"
-                    onClick={() => {
-                      localStorage.setItem("DELETE_API_URL", deleteApiUrlInput.trim());
-                      localStorage.setItem("DELETE_API_KEY", deleteApiKeyInput.trim());
-                    }}
+                    variant="outline"
+                    className={hasDeleteConfig ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : ""}
+                    onClick={() => setShowDeleteConfig((v) => !v)}
                   >
-                    Salvar
+                    <Link2 className="mr-1 h-4 w-4" />
+                    {hasDeleteConfig ? "API Delete conectada" : "Configurar API Delete"}
                   </Button>
+                  {hasDeleteConfig && (
+                    <Button type="button" variant="ghost" onClick={() => setShowDeleteConfig((v) => !v)}>
+                      Editar
+                    </Button>
+                  )}
                 </div>
               </div>
+
+              {showDeleteConfig && (
+                <div className="mt-3 space-y-2">
+                  <Input
+                    value={deleteApiUrlInput}
+                    onChange={(e) => setDeleteApiUrlInput(e.target.value)}
+                    placeholder="API Delete URL (Web App)"
+                  />
+                  <div className="flex gap-2">
+                    <Input
+                      type={showDeleteKey ? "text" : "password"}
+                      value={deleteApiKeyInput}
+                      onChange={(e) => setDeleteApiKeyInput(e.target.value)}
+                      placeholder="API Delete KEY"
+                    />
+                    <Button type="button" variant="outline" onClick={() => setShowDeleteKey((v) => !v)}>
+                      {showDeleteKey ? "Ocultar" : "Mostrar"}
+                    </Button>
+                  </div>
+                  <div>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        localStorage.setItem("DELETE_API_URL", deleteApiUrlInput.trim());
+                        localStorage.setItem("DELETE_API_KEY", deleteApiKeyInput.trim());
+                        setShowDeleteKey(false);
+                        setShowDeleteConfig(false);
+                        toast.success("Configuração da API Delete salva");
+                      }}
+                    >
+                      Salvar
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {!showDeleteConfig && !hasDeleteConfig && (
+                <p className="mt-2 text-xs text-muted-foreground">Clique em “Configurar API Delete” para informar URL e chave.</p>
+              )}
+              {!showDeleteConfig && hasDeleteConfig && (
+                <p className="mt-2 text-xs text-muted-foreground">Configuração salva e pronta para uso no botão Excluir.</p>
+              )}
             </div>
           </>
         )}
@@ -312,3 +350,4 @@ const Index = () => {
 };
 
 export default Index;
+
