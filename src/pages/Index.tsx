@@ -6,7 +6,7 @@ import { Filters, FilterValues, emptyFilters } from "@/components/Filters";
 import { DataTable, CARTAS_COLUMNS, OBREIROS_COLUMNS } from "@/components/DataTable";
 import { parseDate } from "@/lib/sheets";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Users, Loader2, Link2 } from "lucide-react";
+import { FileText, Loader2, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -22,21 +22,10 @@ const CARTAS_DETAIL_FIELDS = [
   { key: "igreja_destino", label: "Qual Igreja você está indo pregar?" },
 ];
 
-const OBREIROS_DETAIL_FIELDS = [
-  { key: "nome", label: "Nome" },
-  { key: "cargo", label: "Cargo" },
-  { key: "igreja", label: "Igreja" },
-  { key: "campo", label: "Campo" },
-  { key: "status", label: "Status" },
-  { key: "data_ordenacao", label: "Data da Ordenação" },
-  { key: "data_batismo", label: "Data do Batismo" },
-];
-
 const Index = () => {
   const { url, cartas, obreiros, loading, error, connected, connect, disconnect, hasObreiros, cartasSheetUsed, customSheetName, setCustomSheetName } = useSheetData();
   const [activeTab, setActiveTab] = useState("cartas");
   const [cartasFilters, setCartasFilters] = useState<FilterValues>(emptyFilters);
-  const [obreirosFilters, setObreirosFilters] = useState<FilterValues>(emptyFilters);
   const [formUrl, setFormUrl] = useState(() => localStorage.getItem("bloqueio_form_url") || "");
   const [formInput, setFormInput] = useState(() => localStorage.getItem("bloqueio_form_url") || "");
   const [showFormConfig, setShowFormConfig] = useState(false);
@@ -62,17 +51,7 @@ const Index = () => {
     });
   }, [cartas, cartasFilters]);
 
-  const filteredObreiros = useMemo(() => {
-    return obreiros.filter((row) => {
-      const f = obreirosFilters;
-      if (f.search && !row.nome.toLowerCase().includes(f.search.toLowerCase())) return false;
-      if (f.igreja && row.igreja !== f.igreja) return false;
-      if (f.campo && row.campo !== f.campo) return false;
-      if (f.cargo && row.cargo !== f.cargo) return false;
-      if (f.status && row.status !== f.status) return false;
-      return true;
-    });
-  }, [obreiros, obreirosFilters]);
+  const filteredObreiros = obreiros;
 
   return (
     <div className="min-h-screen bg-background">
@@ -178,11 +157,6 @@ const Index = () => {
                 <TabsTrigger value="cartas" className="gap-1.5">
                   <FileText className="h-4 w-4" /> Cartas ({filteredCartas.length})
                 </TabsTrigger>
-                {hasObreiros && (
-                  <TabsTrigger value="obreiros" className="gap-1.5">
-                    <Users className="h-4 w-4" /> Obreiros ({filteredObreiros.length})
-                  </TabsTrigger>
-                )}
               </TabsList>
               </div>
 
@@ -204,20 +178,6 @@ const Index = () => {
                 />
               </TabsContent>
 
-              {hasObreiros && (
-                <TabsContent value="obreiros" className="mt-4 space-y-4">
-                  <Filters
-                    filters={obreirosFilters}
-                    onChange={setObreirosFilters}
-                    data={obreiros}
-                    igrejaKey="igreja"
-                    campoKey="campo"
-                    cargoKey="cargo"
-                    statusKey="status"
-                  />
-                  <DataTable data={filteredObreiros} columns={OBREIROS_COLUMNS} showDetails detailFields={OBREIROS_DETAIL_FIELDS} />
-                </TabsContent>
-              )}
             </Tabs>
           </>
         )}
