@@ -44,11 +44,27 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true,
 
   const shareOnWhatsApp = (row: Record<string, string>) => {
     const nome = row.nome && !isEmptyValue(row.nome) ? row.nome : "registro";
-    const pdf = row.url_pdf && !isEmptyValue(row.url_pdf) ? row.url_pdf : "";
+    const normalizeUrl = (value?: string) => {
+      if (!value || isEmptyValue(value)) return "";
+      const trimmed = value.trim();
+      if (!trimmed) return "";
+      if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+      if (trimmed.startsWith("www.")) return `https://${trimmed}`;
+      return `https://${trimmed}`;
+    };
+
+    const pdf = normalizeUrl(row.url_pdf);
     const message = pdf
       ? `Confira esta carta de ${nome}: ${pdf}`
       : `Confira este registro de ${nome}.`;
-    const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    const rawPhone = row.telefone ?? row.phone ?? "";
+    let digits = rawPhone.replace(/\D/g, "");
+    if (digits.length === 10 || digits.length === 11) {
+      digits = `55${digits}`;
+    }
+    const url = digits
+      ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
