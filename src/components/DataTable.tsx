@@ -2,7 +2,7 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, ExternalLink, Eye } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, Eye, Share2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate, parseDate } from "@/lib/sheets";
 
@@ -42,6 +42,16 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true,
     ? columns.filter((c) => data.some((row) => !isEmptyValue(row[c.key])))
     : columns;
 
+  const shareOnWhatsApp = (row: Record<string, string>) => {
+    const nome = row.nome && !isEmptyValue(row.nome) ? row.nome : "registro";
+    const pdf = row.url_pdf && !isEmptyValue(row.url_pdf) ? row.url_pdf : "";
+    const message = pdf
+      ? `Confira esta carta de ${nome}: ${pdf}`
+      : `Confira este registro de ${nome}.`;
+    const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <>
       <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
@@ -62,9 +72,12 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true,
                   ))}
                 </div>
                 {showDetails && (
-                  <div className="mt-3">
+                  <div className="mt-3 grid grid-cols-2 gap-2">
                     <Button variant="outline" size="sm" onClick={() => setDetailRow(row)} className="w-full text-xs">
-                      <Eye className="mr-1 h-3.5 w-3.5" /> Ver detalhes
+                      <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => shareOnWhatsApp(row)} className="w-full text-xs">
+                      <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
                     </Button>
                   </div>
                 )}
@@ -102,9 +115,14 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true,
                     ))}
                     {showDetails && (
                       <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => setDetailRow(row)} className="text-xs">
-                          <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => setDetailRow(row)} className="text-xs">
+                            <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => shareOnWhatsApp(row)} className="text-xs">
+                            <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
+                          </Button>
+                        </div>
                       </TableCell>
                     )}
                   </TableRow>
