@@ -139,6 +139,10 @@ export function useSheetData() {
         });
       }
 
+      if (cartasData.length > 0) {
+        cartasData = cartasData.slice(-10).reverse();
+      }
+
       // Try OBREIRO/OBREIROS first, then DB fallback
       let obreirosData: Record<string, string>[] = [];
       let obOk = false;

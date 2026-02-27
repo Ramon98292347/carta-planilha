@@ -3,7 +3,7 @@ import { useSheetData } from "@/hooks/useSheetData";
 import { ConnectionPanel } from "@/components/ConnectionPanel";
 import { MetricCards } from "@/components/MetricCards";
 import { Filters, FilterValues, emptyFilters } from "@/components/Filters";
-import { DataTable, CARTAS_COLUMNS, OBREIROS_COLUMNS } from "@/components/DataTable";
+import { DataTable, CARTAS_COLUMNS } from "@/components/DataTable";
 import { parseDate } from "@/lib/sheets";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Loader2, Link2 } from "lucide-react";
@@ -29,6 +29,9 @@ const Index = () => {
   const [formUrl, setFormUrl] = useState(() => localStorage.getItem("bloqueio_form_url") || "");
   const [formInput, setFormInput] = useState(() => localStorage.getItem("bloqueio_form_url") || "");
   const [showFormConfig, setShowFormConfig] = useState(false);
+  const [cartaFormUrl, setCartaFormUrl] = useState(() => localStorage.getItem("carta_form_url") || "");
+  const [cartaFormInput, setCartaFormInput] = useState(() => localStorage.getItem("carta_form_url") || "");
+  const [showCartaFormConfig, setShowCartaFormConfig] = useState(false);
 
   const filteredCartas = useMemo(() => {
     return cartas.filter((row) => {
@@ -91,64 +94,126 @@ const Index = () => {
           <>
             <MetricCards cartas={filteredCartas} obreiros={filteredObreiros} />
 
-            <div className="rounded-lg border bg-card p-4 shadow-sm">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold">Formulário de Bloqueio</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Configure a URL do formulário de bloqueio. Quando conectado, o botão abre o formulário.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={
-                      formUrl
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                        : ""
-                    }
-                    onClick={() => {
-                      if (formUrl) {
-                        window.open(formUrl, "_blank", "noopener,noreferrer");
-                        return;
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-lg border bg-card p-4 shadow-sm">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold">Formulário de Bloqueio</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Configure a URL do formulário de bloqueio. Quando conectado, o botão abre o formulário.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={
+                        formUrl
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                          : ""
                       }
-                      setShowFormConfig((v) => !v);
-                    }}
-                  >
-                    <Link2 className="mr-1 h-4 w-4" />
-                    {formUrl ? "Logado no formulário" : "Configurar formulário"}
-                  </Button>
-                  {formUrl && (
-                    <Button type="button" variant="ghost" onClick={() => setShowFormConfig((v) => !v)}>
-                      Editar URL
+                      onClick={() => {
+                        if (formUrl) {
+                          window.open(formUrl, "_blank", "noopener,noreferrer");
+                          return;
+                        }
+                        setShowFormConfig((v) => !v);
+                      }}
+                    >
+                      <Link2 className="mr-1 h-4 w-4" />
+                      {formUrl ? "Logado no formulário" : "Configurar formulário"}
                     </Button>
-                  )}
+                    {formUrl && (
+                      <Button type="button" variant="ghost" onClick={() => setShowFormConfig((v) => !v)}>
+                        Editar URL
+                      </Button>
+                    )}
+                  </div>
                 </div>
+
+                {showFormConfig && (
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      value={formInput}
+                      onChange={(e) => setFormInput(e.target.value)}
+                      placeholder="Cole a URL do formulário de bloqueio..."
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      disabled={!formInput.trim()}
+                      onClick={() => {
+                        const next = formInput.trim();
+                        setFormUrl(next);
+                        localStorage.setItem("bloqueio_form_url", next);
+                        setShowFormConfig(false);
+                      }}
+                    >
+                      Salvar
+                    </Button>
+                  </div>
+                )}
               </div>
 
-              {showFormConfig && (
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    value={formInput}
-                    onChange={(e) => setFormInput(e.target.value)}
-                    placeholder="Cole a URL do formulário de bloqueio..."
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    disabled={!formInput.trim()}
-                    onClick={() => {
-                      const next = formInput.trim();
-                      setFormUrl(next);
-                      localStorage.setItem("bloqueio_form_url", next);
-                      setShowFormConfig(false);
-                    }}
-                  >
-                    Salvar
-                  </Button>
+              <div className="rounded-lg border bg-card p-4 shadow-sm">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold">Formulário da Carta</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Configure a URL do formulário da carta. Quando conectado, o botão abre o formulário.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={
+                        cartaFormUrl
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                          : ""
+                      }
+                      onClick={() => {
+                        if (cartaFormUrl) {
+                          window.open(cartaFormUrl, "_blank", "noopener,noreferrer");
+                          return;
+                        }
+                        setShowCartaFormConfig((v) => !v);
+                      }}
+                    >
+                      <Link2 className="mr-1 h-4 w-4" />
+                      {cartaFormUrl ? "Logado no formulário" : "Configurar formulário"}
+                    </Button>
+                    {cartaFormUrl && (
+                      <Button type="button" variant="ghost" onClick={() => setShowCartaFormConfig((v) => !v)}>
+                        Editar URL
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              )}
+
+                {showCartaFormConfig && (
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      value={cartaFormInput}
+                      onChange={(e) => setCartaFormInput(e.target.value)}
+                      placeholder="Cole a URL do formulário da carta..."
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      disabled={!cartaFormInput.trim()}
+                      onClick={() => {
+                        const next = cartaFormInput.trim();
+                        setCartaFormUrl(next);
+                        localStorage.setItem("carta_form_url", next);
+                        setShowCartaFormConfig(false);
+                      }}
+                    >
+                      Salvar
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
