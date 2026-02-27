@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { useSheetData } from "@/hooks/useSheetData";
 import { ConnectionPanel } from "@/components/ConnectionPanel";
 import { MetricCards } from "@/components/MetricCards";
@@ -55,18 +55,18 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card shadow-sm">
-        <div className="container mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
+        <div className="container mx-auto flex items-center gap-3 px-4 py-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
             <FileText className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-xl font-display font-bold text-foreground">Painel de Gestão</h1>
+            <h1 className="text-lg font-display font-bold text-foreground sm:text-xl">Painel de Gestão</h1>
             <p className="text-xs text-muted-foreground">Cartas e Obreiros</p>
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-6 space-y-6">
+      <main className="container mx-auto space-y-6 px-4 py-6">
         <ConnectionPanel
           url={url}
           connected={connected}
@@ -151,7 +151,8 @@ const Index = () => {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="w-full sm:w-auto">
+              <div className="overflow-x-auto pb-1">
+              <TabsList className="min-w-max w-full sm:w-auto">
                 <TabsTrigger value="cartas" className="gap-1.5">
                   <FileText className="h-4 w-4" /> Cartas ({filteredCartas.length})
                 </TabsTrigger>
@@ -161,8 +162,9 @@ const Index = () => {
                   </TabsTrigger>
                 )}
               </TabsList>
+              </div>
 
-              <TabsContent value="cartas" className="space-y-4 mt-4">
+              <TabsContent value="cartas" className="mt-4 space-y-4">
                 <Filters
                   filters={cartasFilters}
                   onChange={setCartasFilters}
@@ -175,7 +177,7 @@ const Index = () => {
               </TabsContent>
 
               {hasObreiros && (
-                <TabsContent value="obreiros" className="space-y-4 mt-4">
+                <TabsContent value="obreiros" className="mt-4 space-y-4">
                   <Filters
                     filters={obreirosFilters}
                     onChange={setObreirosFilters}
@@ -194,13 +196,11 @@ const Index = () => {
 
         {!connected && !loading && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
               <FileText className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h2 className="text-lg font-display font-semibold text-foreground mb-2">
-              Conecte sua planilha
-            </h2>
-            <p className="text-sm text-muted-foreground max-w-md">
+            <h2 className="mb-2 text-lg font-display font-semibold text-foreground">Conecte sua planilha</h2>
+            <p className="max-w-md text-sm text-muted-foreground">
               Cole a URL de uma planilha Google Sheets publicada acima para visualizar os dados de cartas e obreiros.
             </p>
           </div>

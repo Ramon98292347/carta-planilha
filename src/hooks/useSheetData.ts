@@ -3,6 +3,7 @@ import { extractSpreadsheetId, fetchSheetData, transformAcessoRow, transformCart
 
 const STORAGE_KEY = "sheets_dashboard_url";
 const STORAGE_SHEET_KEY = "sheets_dashboard_custom_sheet";
+const PRIMARY_CARTAS_SHEET = "Respostas ao formulário 1";
 
 export function useSheetData() {
   const [url, setUrl] = useState(() => localStorage.getItem(STORAGE_KEY) || "");
@@ -34,12 +35,13 @@ export function useSheetData() {
     setError(null);
 
     try {
-      // Try CARTAS_DB first, then custom name, then CARTAS
+      // Sempre prioriza a aba oficial de dados de cartas
       let cartasData: Record<string, string>[] = [];
       let usedSheet = "";
-      const cartasSheets = ["CARTAS_DB"];
-      if (sheetName?.trim()) cartasSheets.push(sheetName.trim());
-      cartasSheets.push("CARTAS");
+      const cartasSheets = [PRIMARY_CARTAS_SHEET, "CARTAS_DB", "CARTAS"];
+      if (sheetName?.trim() && !cartasSheets.includes(sheetName.trim())) {
+        cartasSheets.push(sheetName.trim());
+      }
 
       for (const sheet of cartasSheets) {
         try {
@@ -97,11 +99,11 @@ export function useSheetData() {
           const fromNome = acessoByNome.get(normalize(row.nome));
           const fromTel = acessoByTelefone.get(normalize(row.telefone));
           const acesso = fromEmail ?? fromTel ?? fromNome;
-          if (!acesso) return row;
+          const next = { ...row, status: "-", motivo_bloqueio: "-" };
+          if (!acesso) return next;
 
           const status = (acesso.status || "").trim();
           const motivo = (acesso.motivo || "").trim();
-          const next = { ...row };
 
           if (status) next.status = status;
           if (motivo && motivo !== "-" && motivo !== "—" && motivo !== "â€”") next.motivo_bloqueio = motivo;

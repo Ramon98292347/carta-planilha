@@ -181,7 +181,7 @@ const ACESSO_ALIASES: Record<string, string[]> = {
   email: ["email", "E-mail", "e-mail", "Email"],
   nome: ["nome", "Nome", "Nome completo"],
   telefone: ["telefone", "Telefone", "WhatsApp", "Celular"],
-  status: ["status", "Status", "Situação", "Situacao", "Acesso"],
+  status: ["status", "Status", "Statu", "Situação", "Situacao", "Acesso"],
   motivo: ["motivo", "Motivo", "Motivo do bloqueio", "Justificativa", "Observação", "Observacao"],
 };
 
@@ -316,11 +316,11 @@ export async function fetchSheetData(
   const url = buildCsvUrl(spreadsheetId, sheetName);
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`NÃ£o foi possÃ­vel acessar a aba "${sheetName}". Verifique se a planilha estÃ¡ publicada na web.`);
+    throw new Error(`Não foi possível acessar a aba "${sheetName}". Verifique se a planilha está publicada na web.`);
   }
   const text = await response.text();
   if (text.includes("<!DOCTYPE html>") || text.includes("<html")) {
-    throw new Error(`A aba "${sheetName}" nÃ£o foi encontrada ou a planilha nÃ£o estÃ¡ pÃºblica. Publique via Arquivo â†’ Compartilhar â†’ Publicar na web.`);
+    throw new Error(`A aba "${sheetName}" não foi encontrada ou a planilha não está pública. Publique via Arquivo -> Compartilhar -> Publicar na web.`);
   }
   return parseCSV(text);
 }

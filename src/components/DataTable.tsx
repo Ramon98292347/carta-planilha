@@ -39,7 +39,35 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true 
   return (
     <>
       <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="space-y-3 p-3 md:hidden">
+          {pageData.length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">Nenhum registro encontrado</div>
+          ) : (
+            pageData.map((row, i) => (
+              <div key={i} className="rounded-md border bg-background p-3">
+                <div className="space-y-2">
+                  {visibleColumns.map((c) => (
+                    <div key={c.key} className="grid grid-cols-[110px_1fr] gap-2 text-sm">
+                      <span className="font-medium text-muted-foreground">{c.label}</span>
+                      <span className="break-words text-foreground">
+                        {c.render ? c.render(row) : (isEmptyValue(row[c.key]) ? EMPTY : row[c.key])}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {showDetails && (
+                  <div className="mt-3">
+                    <Button variant="outline" size="sm" onClick={() => setDetailRow(row)} className="w-full text-xs">
+                      <Eye className="mr-1 h-3.5 w-3.5" /> Ver detalhes
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -62,7 +90,7 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true 
                 pageData.map((row, i) => (
                   <TableRow key={i}>
                     {visibleColumns.map((c) => (
-                      <TableCell key={c.key} className="whitespace-nowrap text-sm">
+                      <TableCell key={c.key} className="text-sm">
                         {c.render ? c.render(row) : (isEmptyValue(row[c.key]) ? EMPTY : row[c.key])}
                       </TableCell>
                     ))}
