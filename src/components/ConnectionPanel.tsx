@@ -25,20 +25,22 @@ export function ConnectionPanel({ url, connected, loading, error, cartasSheetUse
 
   return (
     <div className="rounded-lg border bg-card p-4 md:p-6 shadow-sm">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
           <Link2 className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-display font-bold text-card-foreground">Conexão com Planilha</h2>
+          </div>
           {connected && (
-            <span className="ml-2 inline-flex items-center gap-1 text-xs font-medium text-success">
+            <span className="mt-1 inline-flex max-w-full items-center gap-1 text-xs font-medium text-success">
               <CheckCircle2 className="h-3.5 w-3.5" /> Conectado
-              {cartasSheetUsed && <span className="text-muted-foreground ml-1">(aba: {cartasSheetUsed})</span>}
+              {cartasSheetUsed && <span className="ml-1 truncate text-muted-foreground">(aba: {cartasSheetUsed})</span>}
             </span>
           )}
         </div>
 
         {connected && (
-          <Button type="button" variant="outline" onClick={onDisconnect} disabled={loading}>
+          <Button type="button" variant="outline" onClick={onDisconnect} disabled={loading} className="w-full sm:w-auto">
             <Unlink className="h-4 w-4 mr-1" /> Desconectar
           </Button>
         )}
@@ -46,7 +48,7 @@ export function ConnectionPanel({ url, connected, loading, error, cartasSheetUse
 
       {!connected && (
         <form onSubmit={handleSubmit} className="space-y-2">
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               placeholder="Cole a URL da planilha Google Sheets publicada..."
               value={inputUrl}
@@ -54,8 +56,8 @@ export function ConnectionPanel({ url, connected, loading, error, cartasSheetUse
               className="flex-1"
               disabled={loading}
             />
-            <div className="flex gap-2">
-              <Button type="submit" disabled={loading || !inputUrl.trim()}>
+            <div className="flex w-full gap-2 sm:w-auto">
+              <Button type="submit" disabled={loading || !inputUrl.trim()} className="w-full sm:w-auto">
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
                 Conectar
               </Button>
