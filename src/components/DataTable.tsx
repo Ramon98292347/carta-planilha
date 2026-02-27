@@ -15,14 +15,20 @@ interface Column {
   render?: (row: Record<string, string>) => React.ReactNode;
 }
 
+interface DetailField {
+  key: string;
+  label: string;
+}
+
 interface Props {
   data: Record<string, string>[];
   columns: Column[];
   showDetails?: boolean;
   hideEmptyColumns?: boolean;
+  detailFields?: DetailField[];
 }
 
-export function DataTable({ data, columns, showDetails, hideEmptyColumns = true }: Props) {
+export function DataTable({ data, columns, showDetails, hideEmptyColumns = true, detailFields }: Props) {
   const [page, setPage] = useState(0);
   const [detailRow, setDetailRow] = useState<Record<string, string> | null>(null);
 
@@ -132,9 +138,16 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true 
           </DialogHeader>
           {detailRow && (
             <div className="space-y-2">
-              {Object.entries(detailRow).map(([key, value]) => (
-                <div key={key} className="flex gap-2 border-b pb-2 text-sm">
-                  <span className="min-w-[120px] font-medium text-muted-foreground">{key}</span>
+              {(detailFields
+                ? detailFields
+                : columns
+                    .map((c) => ({ key: c.key, label: c.label }))
+                    .filter(({ key }) => !isEmptyValue(detailRow[key]))
+              ).map(({ key, label }) => {
+                const value = detailRow[key];
+                return (
+                <div key={key + label} className="flex gap-2 border-b pb-2 text-sm">
+                  <span className="min-w-[140px] font-medium text-muted-foreground">{label}</span>
                   <span className="break-all text-foreground">
                     {value && (value.startsWith("http://") || value.startsWith("https://")) ? (
                       <a href={value} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary underline">
@@ -145,7 +158,7 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true 
                     )}
                   </span>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </DialogContent>

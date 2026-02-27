@@ -10,6 +10,18 @@ import { FileText, Users, Loader2, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+const CARTAS_DETAIL_FIELDS = [
+  { key: "regiao", label: "Qual região Pertence" },
+  { key: "igreja_origem", label: "Qual Igreja Você Pertence?" },
+  { key: "nome", label: "Nome completo" },
+  { key: "telefone", label: "Telefone" },
+  { key: "data_pregacao", label: "Data da pregação" },
+  { key: "data_ordenacao", label: "Data da Ordenação" },
+  { key: "funcao", label: "Função Ministerial ?" },
+  { key: "ipda_destino", label: "Igreja Destino" },
+  { key: "igreja_destino", label: "Qual Igreja você está indo pregar?" },
+];
+
 const Index = () => {
   const { url, cartas, obreiros, loading, error, connected, connect, disconnect, hasObreiros, cartasSheetUsed, customSheetName, setCustomSheetName } = useSheetData();
   const [activeTab, setActiveTab] = useState("cartas");
@@ -173,7 +185,13 @@ const Index = () => {
                   cargoKey="cargo"
                   statusKey="status"
                 />
-                <DataTable data={filteredCartas} columns={CARTAS_COLUMNS} hideEmptyColumns={false} />
+                <DataTable
+                  data={filteredCartas}
+                  columns={CARTAS_COLUMNS}
+                  hideEmptyColumns={false}
+                  showDetails
+                  detailFields={CARTAS_DETAIL_FIELDS}
+                />
               </TabsContent>
 
               {hasObreiros && (
