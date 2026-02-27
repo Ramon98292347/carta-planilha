@@ -2,9 +2,10 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, ExternalLink, Eye, Share2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, Eye, Share2, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate, parseDate } from "@/lib/sheets";
+import { toast } from "sonner";
 
 const PAGE_SIZE = 25;
 const EMPTY = "\u2014";
@@ -26,18 +27,28 @@ interface Props {
   showDetails?: boolean;
   hideEmptyColumns?: boolean;
   detailFields?: DetailField[];
+  enableDelete?: boolean;
+  onDeleteSuccess?: (row: Record<string, string>) => void;
 }
 
-export function DataTable({ data, columns, showDetails, hideEmptyColumns = true, detailFields }: Props) {
+export function DataTable({
+  data,
+  columns,
+  showDetails,
+  hideEmptyColumns = true,
+  detailFields,
+  enableDelete = false,
+  onDeleteSuccess,
+}: Props) {
   const [page, setPage] = useState(0);
   const [detailRow, setDetailRow] = useState<Record<string, string> | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
   const totalPages = Math.ceil(data.length / PAGE_SIZE);
   const pageData = data.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const isEmptyValue = (value?: string) => !value || value === "-" || value === "â€”" || value === EMPTY;
 
-  // Only show columns that have at least one non-empty value
   const visibleColumns = hideEmptyColumns
     ? columns.filter((c) => data.some((row) => !isEmptyValue(row[c.key])))
     : columns;
@@ -54,9 +65,7 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true,
     };
 
     const pdf = normalizeUrl(row.url_pdf);
-    const message = pdf
-      ? `Confira esta carta de ${nome}: ${pdf}`
-      : `Confira este registro de ${nome}.`;
+    const message = pdf ? `Confira esta carta de ${nome}: ${pdf}` : `Confira este registro de ${nome}.`;
     const rawPhone = row.telefone ?? row.phone ?? "";
     let digits = rawPhone.replace(/\D/g, "");
     if (digits.length === 10 || digits.length === 11) {
@@ -66,6 +75,61 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true,
       ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const deleteKey = (row: Record<string, string>) =>
+    [row.doc_id, row.url_pdf, row.data_emissao, row.nome].map((v) => (v || "").trim()).join("|").toLowerCase();
+
+  const deleteCarta = async (row: Record<string, string>) => {
+    const deleteApiUrl = (localStorage.getItem("DELETE_API_URL") || "").trim();
+    const deleteApiKey = (localStorage.getItem("DELETE_API_KEY") || "").trim();
+
+    if (!deleteApiUrl || !deleteApiKey) {
+      toast.warning("Configure a API Delete em Configurações.");
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      "Deseja excluir esta carta? Isso apagará a linha e enviará o arquivo para a lixeira."
+    );
+    if (!confirmDelete) return;
+
+    const rowKey = deleteKey(row);
+    setDeletingKey(rowKey);
+
+    try {
+      const response = await fetch(`${deleteApiUrl}?api_key=${encodeURIComponent(deleteApiKey)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "delete",
+          docId: row.doc_id || "",
+          pdfUrl: row.url_pdf || "",
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.ok !== true) {
+        const code = String(payload?.error || payload?.code || "").toLowerCase();
+        if (code.includes("unauthorized")) {
+          toast.error("API KEY inválida");
+        } else if (code.includes("not_found")) {
+          toast.error("Carta não encontrada");
+        } else {
+          toast.error("Erro ao excluir");
+        }
+        return;
+      }
+
+      toast.success("Carta excluída");
+      onDeleteSuccess?.(row);
+    } catch {
+      toast.error("Erro ao excluir");
+    } finally {
+      setDeletingKey(null);
+    }
   };
 
   return (
@@ -88,13 +152,24 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true,
                   ))}
                 </div>
                 {showDetails && (
-                  <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className={`mt-3 grid gap-2 ${enableDelete ? "grid-cols-3" : "grid-cols-2"}`}>
                     <Button variant="outline" size="sm" onClick={() => setDetailRow(row)} className="w-full text-xs">
                       <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => shareOnWhatsApp(row)} className="w-full text-xs">
                       <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
                     </Button>
+                    {enableDelete && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => deleteCarta(row)}
+                        disabled={deletingKey === deleteKey(row)}
+                        className="w-full text-xs border-rose-200 text-rose-700 hover:bg-rose-50"
+                      >
+                        <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -138,6 +213,17 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true,
                           <Button variant="ghost" size="sm" onClick={() => shareOnWhatsApp(row)} className="text-xs">
                             <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
                           </Button>
+                          {enableDelete && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteCarta(row)}
+                              disabled={deletingKey === deleteKey(row)}
+                              className="text-xs text-rose-700 hover:text-rose-800"
+                            >
+                              <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     )}
@@ -180,19 +266,20 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true,
               ).map(({ key, label }) => {
                 const value = detailRow[key];
                 return (
-                <div key={key + label} className="flex gap-2 border-b pb-2 text-sm">
-                  <span className="min-w-[140px] font-medium text-muted-foreground">{label}</span>
-                  <span className="break-all text-foreground">
-                    {value && (value.startsWith("http://") || value.startsWith("https://")) ? (
-                      <a href={value} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary underline">
-                        Abrir link <ExternalLink className="h-3 w-3" />
-                      </a>
-                    ) : (
-                      isEmptyValue(value) ? EMPTY : value
-                    )}
-                  </span>
-                </div>
-              )})}
+                  <div key={key + label} className="flex gap-2 border-b pb-2 text-sm">
+                    <span className="min-w-[140px] font-medium text-muted-foreground">{label}</span>
+                    <span className="break-all text-foreground">
+                      {value && (value.startsWith("http://") || value.startsWith("https://")) ? (
+                        <a href={value} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary underline">
+                          Abrir link <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : (
+                        isEmptyValue(value) ? EMPTY : value
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </DialogContent>
@@ -201,7 +288,6 @@ export function DataTable({ data, columns, showDetails, hideEmptyColumns = true,
   );
 }
 
-// Predefined column configs using internal model keys
 export const CARTAS_COLUMNS: Column[] = [
   { key: "data_emissao", label: "Data", render: (r) => formatDate(parseDate(r.data_emissao)) || EMPTY },
   { key: "nome", label: "Nome" },
