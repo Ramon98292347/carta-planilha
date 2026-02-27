@@ -98,19 +98,29 @@ export function DataTable({
     setDeletingKey(rowKey);
 
     try {
+      const payloadToSend = {
+        action: "delete",
+        docId: row.doc_id || "",
+        docUrl: row.url_pdf || "",
+        pdfUrl: row.url_pdf || "",
+      };
+
       const response = await fetch(`${deleteApiUrl}?api_key=${encodeURIComponent(deleteApiKey)}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          action: "delete",
-          docId: row.doc_id || "",
-          pdfUrl: row.url_pdf || "",
-        }),
+        body: JSON.stringify(payloadToSend),
       });
 
-      const payload = await response.json().catch(() => ({}));
+      const raw = await response.text();
+      const payload = (() => {
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return {};
+        }
+      })();
       if (!response.ok || payload?.ok !== true) {
         const code = String(payload?.error || payload?.code || "").toLowerCase();
         if (code.includes("unauthorized")) {
