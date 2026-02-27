@@ -6,9 +6,13 @@ import { ChevronLeft, ChevronRight, ExternalLink, Eye, Share2, Trash2 } from "lu
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate, parseDate } from "@/lib/sheets";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 const PAGE_SIZE = 25;
 const EMPTY = "\u2014";
+const BLOCK_FORM_BASE_URL =
+  "https://docs.google.com/forms/d/e/1FAIpQLSfVxO25I8fXlTHyGy5QHPgAB2aA-1vwRy2jnXfCrH3pj14h-g/viewform";
+const BLOCK_FORM_NAME_FIELD = "entry.1208647889";
 
 interface Column {
   key: string;
@@ -77,66 +81,48 @@ export function DataTable({
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
+  const openBlockForm = (row: Record<string, string>) => {
+    const preacherName = (row.preacher_name || row.nome || "").trim();
+    const url = preacherName
+      ? `${BLOCK_FORM_BASE_URL}?usp=pp_url&${BLOCK_FORM_NAME_FIELD}=${encodeURIComponent(preacherName)}`
+      : BLOCK_FORM_BASE_URL;
+    window.open(url, "_blank");
+  };
+
   const deleteKey = (row: Record<string, string>) =>
     [row.doc_id, row.url_pdf, row.data_emissao, row.nome].map((v) => (v || "").trim()).join("|").toLowerCase();
 
   const deleteCarta = async (row: Record<string, string>) => {
-    const deleteApiUrl = (localStorage.getItem("DELETE_API_URL") || "").trim();
-    const deleteApiKey = (localStorage.getItem("DELETE_API_KEY") || "").trim();
+    const clientId = (localStorage.getItem("clientId") || "").trim();
+    const docId = (row.doc_id || "").trim();
+    const docUrl = (row.doc_url || row.url_pdf || "").trim();
+    const pdfUrl = (row.pdf_url || row.url_pdf || "").trim();
 
-    if (!deleteApiUrl || !deleteApiKey) {
-      toast.warning("Configure a API Delete em Configurações.");
+    if (!clientId || !docId) {
+      toast.error("Não foi possível excluir. Tente novamente.");
       return;
     }
 
-    const confirmDelete = window.confirm(
-      "Deseja excluir esta carta? Isso apagará a linha e enviará o arquivo para a lixeira."
-    );
+    const confirmDelete = window.confirm("Tem certeza que deseja excluir esta carta?");
     if (!confirmDelete) return;
 
     const rowKey = deleteKey(row);
     setDeletingKey(rowKey);
 
     try {
-      const payloadToSend = {
-        action: "delete",
-        docId: row.doc_id || "",
-        docUrl: row.url_pdf || "",
-        pdfUrl: row.url_pdf || "",
-      };
-
-      const response = await fetch(`${deleteApiUrl}?api_key=${encodeURIComponent(deleteApiKey)}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payloadToSend),
+      const { data, error } = await supabase.functions.invoke("delete-carta", {
+        body: { clientId, docId, docUrl, pdfUrl },
       });
 
-      const raw = await response.text();
-      const payload = (() => {
-        try {
-          return JSON.parse(raw);
-        } catch {
-          return {};
-        }
-      })();
-      if (!response.ok || payload?.ok !== true) {
-        const code = String(payload?.error || payload?.code || "").toLowerCase();
-        if (code.includes("unauthorized")) {
-          toast.error("API KEY inválida");
-        } else if (code.includes("not_found")) {
-          toast.error("Carta não encontrada");
-        } else {
-          toast.error("Erro ao excluir");
-        }
+      if (error || !data || (data as any).ok !== true) {
+        toast.error("Não foi possível excluir. Tente novamente.");
         return;
       }
 
-      toast.success("Carta excluída");
+      toast.success("Carta excluída com sucesso.");
       onDeleteSuccess?.(row);
     } catch {
-      toast.error("Erro ao excluir");
+      toast.error("Não foi possível excluir. Tente novamente.");
     } finally {
       setDeletingKey(null);
     }
@@ -162,9 +148,12 @@ export function DataTable({
                   ))}
                 </div>
                 {showDetails && (
-                  <div className={`mt-3 grid gap-2 ${enableDelete ? "grid-cols-3" : "grid-cols-2"}`}>
+                  <div className={`mt-3 grid gap-2 ${enableDelete ? "grid-cols-4" : "grid-cols-3"}`}>
                     <Button variant="outline" size="sm" onClick={() => setDetailRow(row)} className="w-full text-xs">
                       <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => openBlockForm(row)} className="w-full text-xs">
+                      Bloquear
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => shareOnWhatsApp(row)} className="w-full text-xs">
                       <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
@@ -177,7 +166,7 @@ export function DataTable({
                         disabled={deletingKey === deleteKey(row)}
                         className="w-full text-xs border-rose-200 text-rose-700 hover:bg-rose-50"
                       >
-                        <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir
+                        <Trash2 className="mr-1 h-3.5 w-3.5" /> {deletingKey === deleteKey(row) ? "Excluindo..." : "Excluir"}
                       </Button>
                     )}
                   </div>
@@ -220,6 +209,9 @@ export function DataTable({
                           <Button variant="ghost" size="sm" onClick={() => setDetailRow(row)} className="text-xs">
                             <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
                           </Button>
+                          <Button variant="ghost" size="sm" onClick={() => openBlockForm(row)} className="text-xs">
+                            Bloquear
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => shareOnWhatsApp(row)} className="text-xs">
                             <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
                           </Button>
@@ -231,7 +223,7 @@ export function DataTable({
                               disabled={deletingKey === deleteKey(row)}
                               className="text-xs text-rose-700 hover:text-rose-800"
                             >
-                              <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir
+                              <Trash2 className="mr-1 h-3.5 w-3.5" /> {deletingKey === deleteKey(row) ? "Excluindo..." : "Excluir"}
                             </Button>
                           )}
                         </div>

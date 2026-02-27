@@ -21,15 +21,12 @@ const CARTAS_DETAIL_FIELDS = [
   { key: "igreja_destino", label: "Qual Igreja você está indo pregar?" },
 ];
 
-const rowDeleteKey = (row: Record<string, string>) =>
-  [row.doc_id, row.url_pdf, row.data_emissao, row.nome].map((v) => (v || "").trim()).join("|").toLowerCase();
-
 const Index = () => {
   const { cartas, obreiros, loading, connected, connect, disconnect, customSheetName } = useSheetData();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("cartas");
   const [cartasFilters, setCartasFilters] = useState<FilterValues>(emptyFilters);
-  const [deletedRows, setDeletedRows] = useState<Set<string>>(new Set());
+  const [deletedDocIds, setDeletedDocIds] = useState<Set<string>>(new Set());
   const didAutoConnect = useRef(false);
 
   const churchName = (localStorage.getItem("church_name") || "").trim();
@@ -51,7 +48,7 @@ const Index = () => {
 
   const filteredCartas = useMemo(() => {
     return cartas.filter((row) => {
-      if (deletedRows.has(rowDeleteKey(row))) return false;
+      if (deletedDocIds.has((row.doc_id || "").trim())) return false;
 
       const f = cartasFilters;
       if (f.search && !row.nome.toLowerCase().includes(f.search.toLowerCase())) return false;
@@ -70,7 +67,7 @@ const Index = () => {
       }
       return true;
     });
-  }, [cartas, cartasFilters, deletedRows]);
+  }, [cartas, cartasFilters, deletedDocIds]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -187,9 +184,9 @@ const Index = () => {
                   detailFields={CARTAS_DETAIL_FIELDS}
                   enableDelete
                   onDeleteSuccess={(row) => {
-                    setDeletedRows((prev) => {
+                    setDeletedDocIds((prev) => {
                       const next = new Set(prev);
-                      next.add(rowDeleteKey(row));
+                      next.add((row.doc_id || "").trim());
                       return next;
                     });
                   }}
