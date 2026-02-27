@@ -22,6 +22,16 @@ const CARTAS_DETAIL_FIELDS = [
   { key: "igreja_destino", label: "Qual Igreja você está indo pregar?" },
 ];
 
+const OBREIROS_DETAIL_FIELDS = [
+  { key: "nome", label: "Nome" },
+  { key: "cargo", label: "Cargo" },
+  { key: "igreja", label: "Igreja" },
+  { key: "campo", label: "Campo" },
+  { key: "status", label: "Status" },
+  { key: "data_ordenacao", label: "Data da Ordenação" },
+  { key: "data_batismo", label: "Data do Batismo" },
+];
+
 const Index = () => {
   const { url, cartas, obreiros, loading, error, connected, connect, disconnect, hasObreiros, cartasSheetUsed, customSheetName, setCustomSheetName } = useSheetData();
   const [activeTab, setActiveTab] = useState("cartas");
@@ -205,7 +215,7 @@ const Index = () => {
                     cargoKey="cargo"
                     statusKey="status"
                   />
-                  <DataTable data={filteredObreiros} columns={OBREIROS_COLUMNS} showDetails />
+                  <DataTable data={filteredObreiros} columns={OBREIROS_COLUMNS} showDetails detailFields={OBREIROS_DETAIL_FIELDS} />
                 </TabsContent>
               )}
             </Tabs>
