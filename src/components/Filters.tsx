@@ -91,7 +91,7 @@ export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey
   ].filter(Boolean).length;
 
   return (
-    <div className="space-y-4 rounded-2xl border bg-gradient-to-br from-card via-card to-muted/20 p-4 shadow-sm md:p-5">
+    <div className="space-y-4 rounded-2xl border border-border/90 bg-gradient-to-br from-card via-card to-muted/30 p-4 shadow-sm md:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <div className="inline-flex h-8 w-8 items-center justify-center rounded-xl border bg-background/80">
@@ -126,7 +126,7 @@ export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey
             <Button
               variant="outline"
               className={cn(
-                "h-10 justify-start rounded-xl bg-background/70 text-left text-sm font-normal",
+                "h-10 justify-start rounded-xl border-border/90 bg-background text-left text-sm font-normal",
                 !filters.dateStart && "text-muted-foreground"
               )}
             >
@@ -144,7 +144,7 @@ export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey
             <Button
               variant="outline"
               className={cn(
-                "h-10 justify-start rounded-xl bg-background/70 text-left text-sm font-normal",
+                "h-10 justify-start rounded-xl border-border/90 bg-background text-left text-sm font-normal",
                 !filters.dateEnd && "text-muted-foreground"
               )}
             >
@@ -159,7 +159,7 @@ export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey
 
         {uniqueValues.igrejas.length > 0 && (
           <Select value={filters.igreja} onValueChange={(v) => set("igreja", v === "__all__" ? "" : v)}>
-            <SelectTrigger className="h-10 rounded-xl bg-background/70 text-sm"><SelectValue placeholder="Igreja" /></SelectTrigger>
+            <SelectTrigger className="h-10 rounded-xl border-border/90 bg-background text-sm"><SelectValue placeholder="Igreja" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Todas</SelectItem>
               {uniqueValues.igrejas.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
@@ -169,7 +169,7 @@ export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey
 
         {uniqueValues.campos.length > 0 && (
           <Select value={filters.campo} onValueChange={(v) => set("campo", v === "__all__" ? "" : v)}>
-            <SelectTrigger className="h-10 rounded-xl bg-background/70 text-sm"><SelectValue placeholder="Campo" /></SelectTrigger>
+            <SelectTrigger className="h-10 rounded-xl border-border/90 bg-background text-sm"><SelectValue placeholder="Campo" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Todos</SelectItem>
               {uniqueValues.campos.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
@@ -179,7 +179,7 @@ export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey
 
         {uniqueValues.cargos.length > 0 && (
           <Select value={filters.cargo} onValueChange={(v) => set("cargo", v === "__all__" ? "" : v)}>
-            <SelectTrigger className="h-10 rounded-xl bg-background/70 text-sm"><SelectValue placeholder="Cargo" /></SelectTrigger>
+            <SelectTrigger className="h-10 rounded-xl border-border/90 bg-background text-sm"><SelectValue placeholder="Cargo" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Todos</SelectItem>
               {uniqueValues.cargos.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
@@ -189,7 +189,7 @@ export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey
 
         {uniqueValues.statuses.length > 0 && (
           <Select value={filters.status} onValueChange={(v) => set("status", v === "__all__" ? "" : v)}>
-            <SelectTrigger className="h-10 rounded-xl bg-background/70 text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="h-10 rounded-xl border-border/90 bg-background text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Todos</SelectItem>
               {uniqueValues.statuses.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
@@ -204,7 +204,7 @@ export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey
           placeholder="Buscar por nome..."
           value={filters.search}
           onChange={(e) => set("search", e.target.value)}
-          className="h-10 rounded-xl bg-background/70 pl-9 text-sm"
+          className="h-10 rounded-xl border-border/90 bg-background pl-9 text-sm"
         />
       </div>
     </div>

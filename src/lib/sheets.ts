@@ -169,13 +169,17 @@ const CARTAS_ALIASES: Record<string, string[]> = {
 };
 
 const OBREIROS_ALIASES: Record<string, string[]> = {
-  nome: ["nome", "Nome completo", "nome_completo"],
-  cargo: ["cargo", "Função Ministerial ?", "FunÃ§Ã£o Ministerial ?"],
-  igreja: ["igreja", "Qual Igreja Você Pertence?", "Qual Igreja VocÃª Pertence?"],
-  campo: ["campo"],
-  status: ["__col_Z"],
-  data_ordenacao: ["data_ordenacao", "data_ordenaÃ§Ã£o", "Data da OrdenaÃ§Ã£o"],
-  data_batismo: ["data_batismo", "Data do Batismo"],
+  nome: ["nome", "Nome", "Nome completo", "nome_completo"],
+  cargo: ["cargo", "Função Ministerial ?", "FunÃ§Ã£o Ministerial ?", "funcao", "função"],
+  igreja: ["igreja", "igreja_origem", "Qual Igreja Você Pertence?", "Qual Igreja VocÃª Pertence?", "Qual Igreja você está indo pregar?"],
+  campo: ["campo", "regiao", "região", "Qual região Pertence", "Qual regiÃ£o Pertence"],
+  status: ["status", "Status", "__col_Z"],
+  data_ordenacao: ["data_ordenacao", "data_ordenação", "data_ordenaÃ§Ã£o", "Data da Ordenação", "Data da OrdenaÃ§Ã£o", "Data da Ordenação", "Data da pregação.", "data_pregacao"],
+  data_batismo: ["data_batismo", "Data do Batismo", "Data do batismo"],
+  _ps: ["Ps", "ps"],
+  _dic: ["Dic", "dic"],
+  _ob: ["ob", "Ob"],
+  _mem: ["Mem", "mem"],
 };
 
 const ACESSO_ALIASES: Record<string, string[]> = {
@@ -279,9 +283,21 @@ export function transformObreiroRow(raw: Record<string, string>): Record<string,
     return findByAliases(raw, aliases);
   };
 
+  let cargo = get("cargo");
+  if (!cargo) {
+    const ps = findByAliases(raw, OBREIROS_ALIASES._ps);
+    const dic = findByAliases(raw, OBREIROS_ALIASES._dic);
+    const ob = findByAliases(raw, OBREIROS_ALIASES._ob);
+    const mem = findByAliases(raw, OBREIROS_ALIASES._mem);
+    if (ps) cargo = "Pastor";
+    else if (dic) cargo = "Diácono";
+    else if (ob) cargo = "Obreiro";
+    else if (mem) cargo = "Membro";
+  }
+
   return {
     nome: get("nome") || "-",
-    cargo: normalizeCargoLabel(get("cargo")),
+    cargo: normalizeCargoLabel(cargo),
     igreja: get("igreja") || "-",
     campo: get("campo") || "-",
     status: get("status") || "-",

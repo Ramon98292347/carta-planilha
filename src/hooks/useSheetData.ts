@@ -111,10 +111,10 @@ export function useSheetData() {
         });
       }
 
-      // Try OBREIROS_DB then OBREIROS
+      // Try OBREIRO/OBREIROS first, then DB fallback
       let obreirosData: Record<string, string>[] = [];
       let obOk = false;
-      for (const sheet of ["OBREIROS_DB", "OBREIROS"]) {
+      for (const sheet of ["OBREIRO", "Obreiro", "OBREIROS", "OBREIROS_DB"]) {
         try {
           obreirosData = await fetchSheetData(id, sheet);
           if (obreirosData.length > 0) {
