@@ -18,10 +18,9 @@ export function useSheetData() {
   const [connected, setConnected] = useState(false);
   const [hasObreiros, setHasObreiros] = useState(false);
   const [cartasSheetUsed, setCartasSheetUsed] = useState("");
-  const knownCartaKeysRef = useRef<Set<string>>(new Set());
   const initializedKeysRef = useRef(false);
   const syncInFlightRef = useRef(false);
-  const notifiedRecentKeysRef = useRef<Set<string>>(new Set());
+  const lastSeenCarimboMsRef = useRef<number | null>(null);
 
   const normalize = (v: string) =>
     (v || "")
@@ -30,22 +29,6 @@ export function useSheetData() {
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9]/g, "");
-
-  const buildCartaKey = (row: Record<string, string>) =>
-    (() => {
-      const base = [row.doc_id, row.url_pdf, row.data_emissao, row.nome, row.telefone]
-        .map((v) => (v || "").trim())
-        .join("|")
-        .toLowerCase();
-      if (base.replace(/\|/g, "").length > 0) return base;
-
-      const fullFingerprint = Object.keys(row)
-        .sort()
-        .map((k) => `${k}:${(row[k] || "").trim()}`)
-        .join("|")
-        .toLowerCase();
-      return fullFingerprint;
-    })();
 
   const parseCarimboDateTime = (value: string): Date | null => {
     if (!value || value === "-") return null;
@@ -179,40 +162,45 @@ export function useSheetData() {
         throw new Error(hint);
       }
 
-      const incomingKeys = new Set(cartasData.map(buildCartaKey));
-      const now = Date.now();
-      const recentRows = cartasData.filter((row) => {
-        const carimbo = parseCarimboDateTime(row.data_emissao);
-        if (!carimbo) return false;
-        const diff = now - carimbo.getTime();
-        return diff >= 0 && diff <= RECENT_WINDOW_MS;
-      });
+      const sortedByCarimbo = [...cartasData]
+        .map((row) => ({ row, ts: parseCarimboDateTime(row.data_emissao)?.getTime() ?? 0 }))
+        .filter((item) => item.ts > 0)
+        .sort((a, b) => b.ts - a.ts);
 
-      const newRecentRows = recentRows.filter((row) => {
-        const key = buildCartaKey(row);
-        return key && !notifiedRecentKeysRef.current.has(key);
-      });
+      if (sortedByCarimbo.length > 0) {
+        const latestTs = sortedByCarimbo[0].ts;
+        const previousTs = lastSeenCarimboMsRef.current;
+        const newRows = previousTs
+          ? sortedByCarimbo.filter((item) => item.ts > previousTs).map((item) => item.row)
+          : [];
+        const recentRowsOnLogin =
+          !previousTs && !silent
+            ? sortedByCarimbo
+                .filter((item) => latestTs - item.ts <= RECENT_WINDOW_MS)
+                .map((item) => item.row)
+            : [];
 
-      if (initializedKeysRef.current && newRecentRows.length > 0) {
-        const latest = newRecentRows.sort((a, b) => {
-          const da = parseCarimboDateTime(a.data_emissao)?.getTime() ?? 0;
-          const db = parseCarimboDateTime(b.data_emissao)?.getTime() ?? 0;
-          return db - da;
-        })[0];
+        if (initializedKeysRef.current && newRows.length > 0) {
+          const latest = newRows[0];
+          toast.info(newRows.length === 1 ? "Nova carta cadastrada" : `${newRows.length} novas cartas cadastradas`, {
+            description: `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`,
+          });
+        }
 
-        toast.info(newRecentRows.length === 1 ? "Nova carta emitida" : `${newRecentRows.length} novas cartas emitidas`, {
-          description: `Nome: ${latest.nome || "-"} | Carimbo: ${latest.data_emissao || "-"} | Origem: ${
-            latest.igreja_origem || "-"
-          } | Destino: ${latest.igreja_destino || "-"}`,
-        });
+        if (recentRowsOnLogin.length > 0) {
+          const latest = recentRowsOnLogin[0];
+          toast.info(
+            recentRowsOnLogin.length === 1
+              ? "Última carta dos últimos 2 minutos"
+              : `${recentRowsOnLogin.length} cartas nos últimos 2 minutos`,
+            {
+              description: `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`,
+            }
+          );
+        }
+
+        lastSeenCarimboMsRef.current = latestTs;
       }
-
-      newRecentRows.forEach((row) => {
-        const key = buildCartaKey(row);
-        if (key) notifiedRecentKeysRef.current.add(key);
-      });
-
-      knownCartaKeysRef.current = incomingKeys;
       if (!initializedKeysRef.current) initializedKeysRef.current = true;
 
       setCartas(cartasData);
@@ -243,10 +231,9 @@ export function useSheetData() {
     setConnected(false);
     setHasObreiros(false);
     setUrl("");
-    knownCartaKeysRef.current = new Set();
     initializedKeysRef.current = false;
     syncInFlightRef.current = false;
-    notifiedRecentKeysRef.current = new Set();
+    lastSeenCarimboMsRef.current = null;
     localStorage.removeItem(STORAGE_KEY);
   }, []);
 
