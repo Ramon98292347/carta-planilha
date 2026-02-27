@@ -1,9 +1,12 @@
-﻿import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { extractSpreadsheetId, fetchSheetData, transformAcessoRow, transformCartaRow, transformObreiroRow } from "@/lib/sheets";
+import { toast } from "sonner";
 
 const STORAGE_KEY = "sheets_dashboard_url";
 const STORAGE_SHEET_KEY = "sheets_dashboard_custom_sheet";
 const PRIMARY_CARTAS_SHEET = "Respostas ao formulário 1";
+const REFRESH_INTERVAL_MS = 10000;
+const RECENT_WINDOW_MS = 2 * 60 * 1000;
 
 export function useSheetData() {
   const [url, setUrl] = useState(() => localStorage.getItem(STORAGE_KEY) || "");
@@ -15,6 +18,10 @@ export function useSheetData() {
   const [connected, setConnected] = useState(false);
   const [hasObreiros, setHasObreiros] = useState(false);
   const [cartasSheetUsed, setCartasSheetUsed] = useState("");
+  const knownCartaKeysRef = useRef<Set<string>>(new Set());
+  const initializedKeysRef = useRef(false);
+  const syncInFlightRef = useRef(false);
+  const notifiedRecentKeysRef = useRef<Set<string>>(new Set());
 
   const normalize = (v: string) =>
     (v || "")
@@ -24,15 +31,53 @@ export function useSheetData() {
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9]/g, "");
 
-  const connect = useCallback(async (inputUrl: string, sheetName?: string) => {
+  const buildCartaKey = (row: Record<string, string>) =>
+    (() => {
+      const base = [row.doc_id, row.url_pdf, row.data_emissao, row.nome, row.telefone]
+        .map((v) => (v || "").trim())
+        .join("|")
+        .toLowerCase();
+      if (base.replace(/\|/g, "").length > 0) return base;
+
+      const fullFingerprint = Object.keys(row)
+        .sort()
+        .map((k) => `${k}:${(row[k] || "").trim()}`)
+        .join("|")
+        .toLowerCase();
+      return fullFingerprint;
+    })();
+
+  const parseCarimboDateTime = (value: string): Date | null => {
+    if (!value || value === "-") return null;
+    const v = value.trim();
+    const match = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (!match) return null;
+    const day = Number(match[1]);
+    const month = Number(match[2]) - 1;
+    const year = Number(match[3]);
+    const hour = Number(match[4] || 0);
+    const minute = Number(match[5] || 0);
+    const second = Number(match[6] || 0);
+    const date = new Date(year, month, day, hour, minute, second);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const connect = useCallback(async (inputUrl: string, sheetName?: string, options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+
     const id = extractSpreadsheetId(inputUrl);
     if (!id) {
-      setError("URL inválida. Cole uma URL do Google Sheets que contenha /spreadsheets/d/ID/");
+      if (!silent) setError("URL inválida. Cole uma URL do Google Sheets que contenha /spreadsheets/d/ID/");
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
+
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
 
     try {
       // Sempre prioriza a aba oficial de dados de cartas
@@ -134,19 +179,61 @@ export function useSheetData() {
         throw new Error(hint);
       }
 
+      const incomingKeys = new Set(cartasData.map(buildCartaKey));
+      const now = Date.now();
+      const recentRows = cartasData.filter((row) => {
+        const carimbo = parseCarimboDateTime(row.data_emissao);
+        if (!carimbo) return false;
+        const diff = now - carimbo.getTime();
+        return diff >= 0 && diff <= RECENT_WINDOW_MS;
+      });
+
+      const newRecentRows = recentRows.filter((row) => {
+        const key = buildCartaKey(row);
+        return key && !notifiedRecentKeysRef.current.has(key);
+      });
+
+      if (initializedKeysRef.current && newRecentRows.length > 0) {
+        const latest = newRecentRows.sort((a, b) => {
+          const da = parseCarimboDateTime(a.data_emissao)?.getTime() ?? 0;
+          const db = parseCarimboDateTime(b.data_emissao)?.getTime() ?? 0;
+          return db - da;
+        })[0];
+
+        toast.info(newRecentRows.length === 1 ? "Nova carta emitida" : `${newRecentRows.length} novas cartas emitidas`, {
+          description: `Nome: ${latest.nome || "-"} | Carimbo: ${latest.data_emissao || "-"} | Origem: ${
+            latest.igreja_origem || "-"
+          } | Destino: ${latest.igreja_destino || "-"}`,
+        });
+      }
+
+      newRecentRows.forEach((row) => {
+        const key = buildCartaKey(row);
+        if (key) notifiedRecentKeysRef.current.add(key);
+      });
+
+      knownCartaKeysRef.current = incomingKeys;
+      if (!initializedKeysRef.current) initializedKeysRef.current = true;
+
       setCartas(cartasData);
       setObreiros(obreirosData);
       setHasObreiros(obOk);
       setCartasSheetUsed(usedSheet);
       setConnected(true);
-      localStorage.setItem(STORAGE_KEY, inputUrl);
-      if (sheetName?.trim()) localStorage.setItem(STORAGE_SHEET_KEY, sheetName.trim());
-      setUrl(inputUrl);
+
+      if (!silent) {
+        localStorage.setItem(STORAGE_KEY, inputUrl);
+        if (sheetName?.trim()) localStorage.setItem(STORAGE_SHEET_KEY, sheetName.trim());
+        setUrl(inputUrl);
+      }
     } catch (err: any) {
-      setError(err.message || "Erro ao conectar à planilha.");
-      setConnected(false);
+      if (!silent) {
+        setError(err.message || "Erro ao conectar à planilha.");
+        setConnected(false);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
+      syncInFlightRef.current = false;
     }
   }, []);
 
@@ -156,6 +243,10 @@ export function useSheetData() {
     setConnected(false);
     setHasObreiros(false);
     setUrl("");
+    knownCartaKeysRef.current = new Set();
+    initializedKeysRef.current = false;
+    syncInFlightRef.current = false;
+    notifiedRecentKeysRef.current = new Set();
     localStorage.removeItem(STORAGE_KEY);
   }, []);
 
@@ -167,6 +258,16 @@ export function useSheetData() {
       connect(saved, savedSheet || undefined);
     }
   }, [connect]);
+
+  useEffect(() => {
+    if (!connected || !url) return;
+
+    const intervalId = window.setInterval(() => {
+      connect(url, customSheetName || undefined, { silent: true });
+    }, REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [connected, url, customSheetName, connect]);
 
   return {
     url,
