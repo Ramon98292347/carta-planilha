@@ -204,7 +204,7 @@ export function DataTable({
                       size="sm"
                       onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(row) : row)}
                       disabled={shouldHighlightBlocked(row)}
-                      className="w-full text-xs"
+                      className="w-full text-xs border-sky-600 bg-sky-600 text-white hover:bg-sky-700"
                     >
                       <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
                     </Button>
@@ -238,7 +238,7 @@ export function DataTable({
                       size="sm"
                       onClick={() => openCartaForm()}
                       disabled={shouldHighlightBlocked(row)}
-                      className="w-full text-xs"
+                      className="w-full text-xs border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700"
                     >
                       Carta
                     </Button>
@@ -247,7 +247,7 @@ export function DataTable({
                       size="sm"
                       onClick={() => shareOnWhatsApp(row)}
                       disabled={shouldHighlightBlocked(row)}
-                      className="w-full text-xs"
+                      className="w-full text-xs border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
                     >
                       <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
                     </Button>
@@ -260,7 +260,7 @@ export function DataTable({
                         window.open(url, "_blank", "noopener,noreferrer");
                       }}
                       disabled={shouldHighlightBlocked(row) || !row.url_pdf || isEmptyValue(row.url_pdf)}
-                      className="w-full text-xs"
+                      className="w-full text-xs border-sky-600 bg-sky-600 text-white hover:bg-sky-700"
                     >
                       <ExternalLink className="mr-1 h-3.5 w-3.5" /> PDF
                     </Button>
@@ -270,7 +270,7 @@ export function DataTable({
                         size="sm"
                         onClick={() => deleteCarta(row)}
                         disabled={deletingKey === deleteKey(row)}
-                        className="w-full text-xs border-rose-200 text-rose-700 hover:bg-rose-50"
+                        className="w-full text-xs border-rose-600 bg-rose-600 text-white hover:bg-rose-700"
                       >
                         <Trash2 className="mr-1 h-3.5 w-3.5" /> {deletingKey === deleteKey(row) ? "Excluindo..." : "Excluir"}
                       </Button>
@@ -325,7 +325,7 @@ export function DataTable({
                             variant="ghost"
                             size="sm"
                             onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(row) : row)}
-                            className="text-xs"
+                            className="text-xs bg-sky-600 text-white hover:bg-sky-700"
                           >
                             <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
                           </Button>
@@ -336,7 +336,7 @@ export function DataTable({
                               size="sm"
                               onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(row) : row)}
                               disabled={shouldHighlightBlocked(row)}
-                              className="text-xs"
+                              className="text-xs bg-sky-600 text-white hover:bg-sky-700"
                             >
                               <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
                             </Button>
@@ -353,7 +353,7 @@ export function DataTable({
                               size="sm"
                               onClick={() => shareOnWhatsApp(row)}
                               disabled={shouldHighlightBlocked(row)}
-                              className="text-xs"
+                              className="text-xs bg-emerald-600 text-white hover:bg-emerald-700"
                             >
                               <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
                             </Button>
@@ -362,7 +362,7 @@ export function DataTable({
                               size="sm"
                               onClick={() => openCartaForm()}
                               disabled={shouldHighlightBlocked(row)}
-                              className="text-xs"
+                              className="text-xs bg-indigo-600 text-white hover:bg-indigo-700"
                             >
                               Carta
                             </Button>
@@ -372,7 +372,7 @@ export function DataTable({
                                 size="sm"
                                 onClick={() => deleteCarta(row)}
                                 disabled={deletingKey === deleteKey(row)}
-                                className="text-xs text-rose-700 hover:text-rose-800"
+                                className="text-xs bg-rose-600 text-white hover:bg-rose-700"
                               >
                                 <Trash2 className="mr-1 h-3.5 w-3.5" /> {deletingKey === deleteKey(row) ? "Excluindo..." : "Excluir"}
                               </Button>
