@@ -13,6 +13,7 @@ const EMPTY = "\u2014";
 const BLOCK_FORM_BASE_URL =
   "https://docs.google.com/forms/d/e/1FAIpQLSfVxO25I8fXlTHyGy5QHPgAB2aA-1vwRy2jnXfCrH3pj14h-g/viewform";
 const BLOCK_FORM_NAME_FIELD = "entry.1208647889";
+const BLOCK_FORM_STATUS_FIELD = "entry.1791445451";
 
 interface Column {
   key: string;
@@ -120,9 +121,12 @@ export function DataTable({
 
   const openBlockForm = (row: Record<string, string>) => {
     const preacherName = (row.preacher_name || row.nome || "").trim();
-    const url = preacherName
-      ? `${BLOCK_FORM_BASE_URL}?usp=pp_url&${BLOCK_FORM_NAME_FIELD}=${encodeURIComponent(preacherName)}`
-      : BLOCK_FORM_BASE_URL;
+    const statusValue = isBlocked(row) ? "AUTORIZADO" : "BLOQUEADO";
+    const params = new URLSearchParams();
+    params.set("usp", "pp_url");
+    if (preacherName) params.set(BLOCK_FORM_NAME_FIELD, preacherName);
+    params.set(BLOCK_FORM_STATUS_FIELD, statusValue);
+    const url = `${BLOCK_FORM_BASE_URL}?${params.toString()}`;
     window.open(url, "_blank");
   };
 
