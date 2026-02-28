@@ -518,16 +518,21 @@ export const CARTAS_COLUMNS: Column[] = [
       if (!url || url === "-" || url === "â€”") return EMPTY;
       const statusValue = (r.status ?? r["__col_Z"] ?? r.Z ?? "").trim().toLowerCase();
       const blocked = !!statusValue && statusValue !== "sim";
-      return (
+      return blocked ? (
         <Button
           variant="outline"
           size="sm"
-          disabled={blocked}
-          onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+          disabled
           className="border-green-600 bg-green-600 text-xs text-white hover:bg-green-700"
         >
           <ExternalLink className="mr-1 h-3 w-3" /> Abrir PDF
         </Button>
+      ) : (
+        <a href={url} target="_blank" rel="noopener noreferrer">
+          <Button variant="outline" size="sm" className="border-green-600 bg-green-600 text-xs text-white hover:bg-green-700">
+            <ExternalLink className="mr-1 h-3 w-3" /> Abrir PDF
+          </Button>
+        </a>
       );
     },
   },
