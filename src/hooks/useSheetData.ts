@@ -9,8 +9,9 @@ const PRIMARY_CARTAS_SHEET_ALT = "Respostas do Formulário 1";
 const PRIMARY_CARTAS_SHEET_ALT2 = "Respostas do formulário 1";
 const PRIMARY_CARTAS_SHEET_ALT3 = "Respostas do Formulario 1";
 const REFRESH_INTERVAL_MS = 30000;
-const RECENT_WINDOW_MS = 5 * 60 * 60 * 1000;
-const NOTIFY_WINDOW_MS = 5 * 60 * 60 * 1000;
+const RECENT_WINDOW_MS = 4 * 60 * 60 * 1000;
+const NOTIFY_WINDOW_MS = 4 * 60 * 60 * 1000;
+const NOTIFICATIONS_STORAGE_KEY = "cartas_notifications";
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
 
@@ -31,7 +32,16 @@ export function useSheetData() {
   const syncInFlightRef = useRef(false);
   const lastSeenCarimboMsRef = useRef<number | null>(null);
   const lastNotifiedTsRef = useRef<number | null>(null);
-  const [notifications, setNotifications] = useState<{ id: string; title: string; body: string; ts: number }[]>([]);
+  const [notifications, setNotifications] = useState<{ id: string; title: string; body: string; ts: number }[]>(() => {
+    const raw = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw) as { id: string; title: string; body: string; ts: number }[];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
 
   const fetchClientCache = async () => {
     const clientId = (localStorage.getItem("clientId") || "").trim();
@@ -417,6 +427,10 @@ export function useSheetData() {
   }, [connect]);
 
   useEffect(() => {
+    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notifications));
+  }, [notifications]);
+
+  useEffect(() => {
     if (!connected || !url) return;
 
     const intervalId = window.setInterval(() => {
@@ -441,7 +455,10 @@ export function useSheetData() {
     hasObreiros,
     cartasSheetUsed,
     notifications,
-    clearNotifications: () => setNotifications([]),
+    clearNotifications: () => {
+      setNotifications([]);
+      localStorage.removeItem(NOTIFICATIONS_STORAGE_KEY);
+    },
     sendStatusById,
     offline,
     lastSyncAt,
