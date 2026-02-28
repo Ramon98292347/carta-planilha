@@ -251,35 +251,35 @@ export function DataTable({
                     >
                       <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const rawUrl =
-                          row.url_pdf ||
-                          row["Merged Doc URL - Cartas"] ||
-                          row["Merged Doc URL - cartas"] ||
-                          row["merged_doc_url_-_cartas"] ||
-                          row["Link to merged Doc - Cartas"] ||
-                          row["Link to merged Doc - cartas"] ||
-                          row["link_to_merged_doc_-_cartas"];
-                        const url = (rawUrl || "").trim();
-                        if (!url || isEmptyValue(url)) return;
-                        window.open(url, "_blank", "noopener,noreferrer");
-                      }}
-                      disabled={isEmptyValue(
-                        (row.url_pdf ||
-                          row["Merged Doc URL - Cartas"] ||
-                          row["Merged Doc URL - cartas"] ||
-                          row["merged_doc_url_-_cartas"] ||
-                          row["Link to merged Doc - Cartas"] ||
-                          row["Link to merged Doc - cartas"] ||
-                          row["link_to_merged_doc_-_cartas"]) as string
-                      )}
-                      className="w-full text-xs border-sky-600 bg-sky-600 text-white hover:bg-sky-700"
-                    >
-                      <ExternalLink className="mr-1 h-3.5 w-3.5" /> PDF
-                    </Button>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        const rawUrl =
+          row.url_pdf ||
+          row["Merged Doc URL - Cartas"] ||
+          row["Merged Doc URL - cartas"] ||
+          row["merged_doc_url_-_cartas"] ||
+          row["Link to merged Doc - Cartas"] ||
+          row["Link to merged Doc - cartas"] ||
+          row["link_to_merged_doc_-_cartas"];
+        const url = (rawUrl || "").trim();
+        if (!url || isEmptyValue(url)) return;
+        window.open(url, "_blank", "noopener,noreferrer");
+      }}
+      disabled={isEmptyValue(
+        (row.url_pdf ||
+          row["Merged Doc URL - Cartas"] ||
+          row["Merged Doc URL - cartas"] ||
+          row["merged_doc_url_-_cartas"] ||
+          row["Link to merged Doc - Cartas"] ||
+          row["Link to merged Doc - cartas"] ||
+          row["link_to_merged_doc_-_cartas"]) as string
+      )}
+      className="w-full text-xs border-green-600 bg-green-600 text-white hover:bg-green-700"
+    >
+      <ExternalLink className="mr-1 h-3.5 w-3.5" /> PDF
+    </Button>
                     {enableDelete && (
                       <Button
                         variant="outline"
@@ -544,7 +544,7 @@ export const CARTAS_COLUMNS: Column[] = [
           variant="outline"
           size="sm"
           asChild
-          className="border-sky-200 bg-sky-50 text-xs text-sky-700 hover:bg-sky-100 hover:text-sky-800 whitespace-nowrap"
+          className="border-green-600 bg-green-600 text-xs text-white hover:bg-green-700 whitespace-nowrap"
         >
           <a
             href={url}
