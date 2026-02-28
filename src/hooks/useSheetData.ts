@@ -7,6 +7,7 @@ const STORAGE_SHEET_KEY = "sheets_dashboard_custom_sheet";
 const PRIMARY_CARTAS_SHEET = "Respostas ao formulário 1";
 const REFRESH_INTERVAL_MS = 10000;
 const RECENT_WINDOW_MS = 2 * 60 * 1000;
+const NOTIFY_WINDOW_MS = 2 * 60 * 1000;
 
 export function useSheetData() {
   const [url, setUrl] = useState(() => localStorage.getItem(STORAGE_KEY) || "");
@@ -194,13 +195,17 @@ export function useSheetData() {
 
         if (initializedKeysRef.current && newRows.length > 0) {
           const latest = newRows[0];
-          const title = newRows.length === 1 ? "Nova carta cadastrada" : `${newRows.length} novas cartas cadastradas`;
-          const body = `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`;
-          toast.info(title, { description: body });
-          setNotifications((prev) => [
-            { id: `${Date.now()}-${latest.doc_id || latest.nome || "carta"}`, title, body, ts: Date.now() },
-            ...prev,
-          ]);
+          const latestTs = parseCarimboDateTime(latest.data_emissao)?.getTime() ?? 0;
+          const nowTs = Date.now();
+          if (latestTs && nowTs - latestTs <= NOTIFY_WINDOW_MS) {
+            const title = newRows.length === 1 ? "Nova carta cadastrada" : `${newRows.length} novas cartas cadastradas`;
+            const body = `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`;
+            toast.info(title, { description: body });
+            setNotifications((prev) => [
+              { id: `${Date.now()}-${latest.doc_id || latest.nome || "carta"}`, title, body, ts: Date.now() },
+              ...prev,
+            ]);
+          }
         }
 
         if (recentRowsOnLogin.length > 0) {
