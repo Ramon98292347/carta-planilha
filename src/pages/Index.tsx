@@ -133,12 +133,12 @@ const Index = () => {
           </div>
 
           <div className="flex w-full flex-col gap-1 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
-            <div className="flex items-center gap-2 sm:order-1">
+            <div className="flex items-center justify-between gap-2 sm:order-1">
               <div className="rounded-md border px-2 py-1 text-xs text-muted-foreground" title={connectedHeader ? "Conectado" : "Configuração incompleta"}>
                 <div>Igreja: {churchName || "—"}</div>
                 <div>Pastor: {pastorName || "—"}</div>
               </div>
-              <div title={connectedHeader ? "Conectado" : "Configuração incompleta"}>
+              <div className="flex h-full items-center" title={connectedHeader ? "Conectado" : "Configuração incompleta"}>
                 {connectedHeader ? (
                   <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                 ) : (
