@@ -5,7 +5,7 @@ import { Filters, FilterValues, emptyFilters } from "@/components/Filters";
 import { DataTable, CARTAS_COLUMNS, OBREIROS_COLUMNS } from "@/components/DataTable";
 import { parseDate } from "@/lib/sheets";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, Bell, CheckCircle2, Download, FileText, Loader2, LogOut } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, Download, FileText, Loader2, LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -27,11 +27,30 @@ const CARTAS_DETAIL_FIELDS = [
   { key: "igreja_destino", label: "Qual Igreja você está indo pregar?" },
 ];
 
+const FILTERS_STORAGE_KEY = "cartas_filters";
+
 const Index = () => {
   const { cartas, obreiros, loading, connected, connect, disconnect, customSheetName, notifications, clearNotifications, sendStatusById } = useSheetData();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("cartas");
-  const [cartasFilters, setCartasFilters] = useState<FilterValues>(emptyFilters);
+  const [cartasFilters, setCartasFilters] = useState<FilterValues>(() => {
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (!raw) return emptyFilters;
+    try {
+      const parsed = JSON.parse(raw) as Partial<FilterValues> & {
+        dateStart?: string | null;
+        dateEnd?: string | null;
+      };
+      return {
+        ...emptyFilters,
+        ...parsed,
+        dateStart: parsed.dateStart ? new Date(parsed.dateStart) : null,
+        dateEnd: parsed.dateEnd ? new Date(parsed.dateEnd) : null,
+      };
+    } catch {
+      return emptyFilters;
+    }
+  });
   const [deletedDocIds, setDeletedDocIds] = useState<Set<string>>(new Set());
   const didAutoConnect = useRef(false);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -61,6 +80,15 @@ const Index = () => {
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
+
+  useEffect(() => {
+    const payload = {
+      ...cartasFilters,
+      dateStart: cartasFilters.dateStart ? cartasFilters.dateStart.toISOString() : null,
+      dateEnd: cartasFilters.dateEnd ? cartasFilters.dateEnd.toISOString() : null,
+    };
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(payload));
+  }, [cartasFilters]);
 
   const handleInstall = async () => {
     if (!installPrompt) return;
@@ -154,6 +182,15 @@ const Index = () => {
                 </Button>
               )}
               <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => connect(googleSheetUrl, customSheetName || undefined)}
+                  disabled={!googleSheetUrl || loading}
+                  className="gap-1"
+                >
+                  <RefreshCw className="h-4 w-4" /> Atualizar
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button type="button" variant="outline" className="relative h-9 w-9 p-0">

@@ -8,9 +8,11 @@ const PRIMARY_CARTAS_SHEET = "Respostas ao formulário 1";
 const PRIMARY_CARTAS_SHEET_ALT = "Respostas do Formulário 1";
 const PRIMARY_CARTAS_SHEET_ALT2 = "Respostas do formulário 1";
 const PRIMARY_CARTAS_SHEET_ALT3 = "Respostas do Formulario 1";
-const REFRESH_INTERVAL_MS = 10000;
+const REFRESH_INTERVAL_MS = 30000;
 const RECENT_WINDOW_MS = 5 * 60 * 60 * 1000;
 const NOTIFY_WINDOW_MS = 5 * 60 * 60 * 1000;
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
+const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
 
 export function useSheetData() {
   const [url, setUrl] = useState(() => localStorage.getItem(STORAGE_KEY) || "");
@@ -28,6 +30,61 @@ export function useSheetData() {
   const lastSeenCarimboMsRef = useRef<number | null>(null);
   const lastNotifiedTsRef = useRef<number | null>(null);
   const [notifications, setNotifications] = useState<{ id: string; title: string; body: string; ts: number }[]>([]);
+
+  const upsertClientCache = async (cartasRows: Record<string, string>[]) => {
+    const clientId = (localStorage.getItem("clientId") || "").trim();
+    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+
+    const headers = {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Prefer: "resolution=merge-duplicates",
+    };
+
+    const payload = {
+      client_id: clientId,
+      last_15_cards: cartasRows,
+    };
+
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/client_cache?on_conflict=client_id`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  const logClientError = async (message: string, context?: string) => {
+    const clientId = (localStorage.getItem("clientId") || "").trim();
+    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+
+    const headers = {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    };
+
+    const payload = {
+      client_id: clientId,
+      message,
+      context: context || null,
+      created_at: new Date().toISOString(),
+    };
+
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/client_errors`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      // ignore
+    }
+  };
 
   const normalize = (v: string) =>
     (v || "")
@@ -248,6 +305,11 @@ export function useSheetData() {
       setCartas(cartasData);
       setObreiros(obreirosData);
 
+      if (sortedByCarimbo.length > 0) {
+        const cacheRows = sortedByCarimbo.slice(0, 15).map((item) => item.row);
+        upsertClientCache(cacheRows);
+      }
+
       // Fetch "Respostas ao formulário 3" for send status
       const fetchSendStatus = async () => {
         const sheets = ["Respostas ao formulário 3", "Respostas ao Formulário 3", "Respostas do formulário 3"];
@@ -282,6 +344,7 @@ export function useSheetData() {
         setUrl(inputUrl);
       }
     } catch (err: any) {
+      logClientError(err?.message || "Erro ao conectar à planilha.", "connect");
       if (!silent) {
         setError(err.message || "Erro ao conectar à planilha.");
         setConnected(false);
