@@ -132,8 +132,8 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
-            <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:justify-end">
+            <div className="flex items-center gap-2 sm:order-2 sm:ml-auto">
               <div className="rounded-md border px-2 py-1 text-xs text-muted-foreground" title={connectedHeader ? "Conectado" : "Configuração incompleta"}>
                 <div>Igreja: {churchName || "—"}</div>
                 <div>Pastor: {pastorName || "—"}</div>
@@ -147,7 +147,7 @@ const Index = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 sm:order-1">
               {installPrompt && (
                 <Button type="button" variant="outline" onClick={handleInstall} className="gap-1">
                   <Download className="h-4 w-4" /> Instalar app
