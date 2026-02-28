@@ -5,10 +5,10 @@ import { Filters, FilterValues, emptyFilters } from "@/components/Filters";
 import { DataTable, CARTAS_COLUMNS, OBREIROS_COLUMNS } from "@/components/DataTable";
 import { parseDate } from "@/lib/sheets";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, CheckCircle2, Download, FileText, Loader2, LogOut, Bell } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, Download, FileText, Loader2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { canUsePush, getCurrentSubscription, getPushPermission, sendTestNotification, subscribeToPush } from "@/lib/push";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -28,19 +28,13 @@ const CARTAS_DETAIL_FIELDS = [
 ];
 
 const Index = () => {
-  const { cartas, obreiros, loading, connected, connect, disconnect, customSheetName } = useSheetData();
+  const { cartas, obreiros, loading, connected, connect, disconnect, customSheetName, notifications, clearNotifications } = useSheetData();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("cartas");
   const [cartasFilters, setCartasFilters] = useState<FilterValues>(emptyFilters);
   const [deletedDocIds, setDeletedDocIds] = useState<Set<string>>(new Set());
   const didAutoConnect = useRef(false);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [pushReady, setPushReady] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(false);
-  const [pushDenied, setPushDenied] = useState(false);
-  const [pushLoading, setPushLoading] = useState(false);
-  const [pushTestLoading, setPushTestLoading] = useState(false);
-  const autoPushRequested = useRef(false);
 
   const churchName = (localStorage.getItem("church_name") || "").trim();
   const pastorName = (localStorage.getItem("pastor_name") || "").trim();
@@ -68,50 +62,6 @@ const Index = () => {
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    const check = async () => {
-      if (!canUsePush()) {
-        if (active) {
-          setPushReady(false);
-          setPushEnabled(false);
-          setPushDenied(false);
-        }
-        return;
-      }
-      const permission = getPushPermission();
-      const subscription = await getCurrentSubscription();
-      if (!active) return;
-      setPushReady(true);
-      setPushEnabled(!!subscription);
-      setPushDenied(permission === "denied");
-    };
-    check();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!pushReady || pushEnabled || pushDenied || pushLoading) return;
-    if (autoPushRequested.current) return;
-    const alreadyTried = localStorage.getItem("push_auto_requested") === "true";
-    if (alreadyTried) {
-      autoPushRequested.current = true;
-      return;
-    }
-    autoPushRequested.current = true;
-    localStorage.setItem("push_auto_requested", "true");
-    subscribeToPush().then((result) => {
-      if (result.ok) {
-        setPushEnabled(true);
-        setPushDenied(false);
-      } else if (result.reason === "denied") {
-        setPushDenied(true);
-      }
-    });
-  }, [pushReady, pushEnabled, pushDenied, pushLoading]);
-
   const handleInstall = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
@@ -119,25 +69,6 @@ const Index = () => {
     if (choice.outcome === "accepted") {
       setInstallPrompt(null);
     }
-  };
-
-  const handleEnablePush = async () => {
-    if (!canUsePush()) return;
-    setPushLoading(true);
-    const result = await subscribeToPush();
-    setPushLoading(false);
-    if (result.ok) {
-      setPushEnabled(true);
-      setPushDenied(false);
-    } else if (result.reason === "denied") {
-      setPushDenied(true);
-    }
-  };
-
-  const handleTestPush = async () => {
-    setPushTestLoading(true);
-    await sendTestNotification();
-    setPushTestLoading(false);
   };
 
   const filteredCartas = useMemo(() => {
@@ -218,16 +149,36 @@ const Index = () => {
                 <Download className="h-4 w-4" /> Instalar app
               </Button>
             )}
-            {pushReady && !pushEnabled && (
-              <Button type="button" variant="outline" onClick={handleEnablePush} disabled={pushLoading || pushDenied} className="gap-1">
-                <Bell className="h-4 w-4" /> {pushDenied ? "Notificações bloqueadas" : pushLoading ? "Ativando..." : "Ativar notificações"}
-              </Button>
-            )}
-            {pushReady && pushEnabled && (
-              <Button type="button" variant="outline" onClick={handleTestPush} disabled={pushTestLoading} className="gap-1">
-                <Bell className="h-4 w-4" /> {pushTestLoading ? "Testando..." : "Testar notificação"}
-              </Button>
-            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" className="relative gap-1">
+                  <Bell className="h-4 w-4" /> Notificacoes
+                  {notifications.length > 0 && (
+                    <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+                      {notifications.length}
+                    </span>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80">
+                <DropdownMenuLabel>Notificacoes</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {notifications.length === 0 ? (
+                  <DropdownMenuItem className="text-muted-foreground">Sem notificacoes</DropdownMenuItem>
+                ) : (
+                  notifications.slice(0, 8).map((n) => (
+                    <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1">
+                      <span className="text-xs font-semibold">{n.title}</span>
+                      <span className="text-xs text-muted-foreground">{n.body}</span>
+                    </DropdownMenuItem>
+                  ))
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={clearNotifications} className="text-xs text-rose-700">
+                  Limpar notificacoes
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               type="button"
               variant="outline"

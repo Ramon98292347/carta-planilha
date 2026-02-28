@@ -1,6 +1,5 @@
 ﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { extractSpreadsheetId, fetchSheetData, transformAcessoRow, transformCartaRow, transformObreiroRow } from "@/lib/sheets";
-import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 const STORAGE_KEY = "sheets_dashboard_url";
@@ -8,7 +7,6 @@ const STORAGE_SHEET_KEY = "sheets_dashboard_custom_sheet";
 const PRIMARY_CARTAS_SHEET = "Respostas ao formulário 1";
 const REFRESH_INTERVAL_MS = 10000;
 const RECENT_WINDOW_MS = 2 * 60 * 1000;
-const NOTIFY_WINDOW_MS = 5 * 60 * 1000;
 
 export function useSheetData() {
   const [url, setUrl] = useState(() => localStorage.getItem(STORAGE_KEY) || "");
@@ -23,6 +21,7 @@ export function useSheetData() {
   const initializedKeysRef = useRef(false);
   const syncInFlightRef = useRef(false);
   const lastSeenCarimboMsRef = useRef<number | null>(null);
+  const [notifications, setNotifications] = useState<{ id: string; title: string; body: string; ts: number }[]>([]);
 
   const normalize = (v: string) =>
     (v || "")
@@ -195,26 +194,13 @@ export function useSheetData() {
 
         if (initializedKeysRef.current && newRows.length > 0) {
           const latest = newRows[0];
-          const latestTs = parseCarimboDateTime(latest.data_emissao)?.getTime() ?? 0;
-          const nowTs = Date.now();
-          if (latestTs && nowTs - latestTs <= NOTIFY_WINDOW_MS) {
-            toast.info(newRows.length === 1 ? "Nova carta cadastrada" : `${newRows.length} novas cartas cadastradas`, {
-              description: `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`,
-            });
-
-            supabase.functions.invoke("notify-carta", {
-              body: {
-                title: "Nova carta cadastrada",
-                body: `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`,
-                url: "/",
-                data: {
-                  nome: latest.nome || "-",
-                  igreja_origem: latest.igreja_origem || "-",
-                  igreja_destino: latest.igreja_destino || "-",
-                },
-              },
-            });
-          }
+          const title = newRows.length === 1 ? "Nova carta cadastrada" : `${newRows.length} novas cartas cadastradas`;
+          const body = `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`;
+          toast.info(title, { description: body });
+          setNotifications((prev) => [
+            { id: `${Date.now()}-${latest.doc_id || latest.nome || "carta"}`, title, body, ts: Date.now() },
+            ...prev,
+          ]);
         }
 
         if (recentRowsOnLogin.length > 0) {
@@ -227,6 +213,15 @@ export function useSheetData() {
               description: `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`,
             }
           );
+          const title =
+            recentRowsOnLogin.length === 1
+              ? "Ultima carta dos ultimos 2 minutos"
+              : `${recentRowsOnLogin.length} cartas nos ultimos 2 minutos`;
+          const body = `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`;
+          setNotifications((prev) => [
+            { id: `${Date.now()}-${latest.doc_id || latest.nome || "carta"}`, title, body, ts: Date.now() },
+            ...prev,
+          ]);
         }
 
         lastSeenCarimboMsRef.current = latestTs;
@@ -300,5 +295,7 @@ export function useSheetData() {
     disconnect,
     hasObreiros,
     cartasSheetUsed,
+    notifications,
+    clearNotifications: () => setNotifications([]),
   };
 }
