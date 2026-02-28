@@ -76,7 +76,7 @@ export function useSheetData() {
     };
 
     try {
-      await fetch(`${SUPABASE_URL}/rest/v1/client_errors`, {
+      await fetch(`${SUPABASE_URL}/rest/v1/client_erros`, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
