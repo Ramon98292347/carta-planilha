@@ -90,6 +90,16 @@ export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey
     filters.search,
   ].filter(Boolean).length;
 
+  const setRange = (days: number) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(today);
+    start.setDate(start.getDate() - (days - 1));
+    const end = new Date(today);
+    end.setHours(23, 59, 59, 999);
+    onChange({ ...filters, dateStart: start, dateEnd: end });
+  };
+
   return (
     <div className="space-y-4 rounded-2xl border border-border/90 bg-gradient-to-br from-card via-card to-muted/30 p-4 shadow-sm md:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -118,6 +128,27 @@ export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey
             </Button>
           )}
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => setRange(1)} className="rounded-full text-xs">
+          Hoje
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setRange(7)} className="rounded-full text-xs">
+          7 dias
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setRange(30)} className="rounded-full text-xs">
+          30 dias
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => onChange({ ...filters, dateStart: undefined, dateEnd: undefined })}
+          className="rounded-full text-xs text-muted-foreground"
+        >
+          Limpar período
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">

@@ -30,7 +30,8 @@ const CARTAS_DETAIL_FIELDS = [
 const FILTERS_STORAGE_KEY = "cartas_filters";
 
 const Index = () => {
-  const { cartas, obreiros, loading, connected, connect, disconnect, customSheetName, notifications, clearNotifications, sendStatusById } = useSheetData();
+  const { cartas, obreiros, loading, connected, connect, disconnect, customSheetName, notifications, clearNotifications, sendStatusById, offline, lastSyncAt } =
+    useSheetData();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("cartas");
   const [cartasFilters, setCartasFilters] = useState<FilterValues>(() => {
@@ -99,28 +100,44 @@ const Index = () => {
     }
   };
 
-  const filteredCartas = useMemo(() => {
-    return cartas.filter((row) => {
-      if (deletedDocIds.has((row.doc_id || "").trim())) return false;
+  const normalizeSearch = (value: string) =>
+    (value || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
 
-      const f = cartasFilters;
-      if (f.search && !row.nome.toLowerCase().includes(f.search.toLowerCase())) return false;
-      if (f.igreja && row.igreja_origem !== f.igreja) return false;
-      if (f.cargo && row.cargo !== f.cargo) return false;
-      if (f.status && row.status !== f.status) return false;
-      if (f.dateStart || f.dateEnd) {
-        const d = parseDate(row.data_emissao);
-        if (!d) return false;
-        if (f.dateStart && d < f.dateStart) return false;
-        if (f.dateEnd) {
-          const end = new Date(f.dateEnd);
-          end.setHours(23, 59, 59, 999);
-          if (d > end) return false;
+  const cartasWithSearch = useMemo(() => {
+    return cartas.map((row) => ({
+      row,
+      search: normalizeSearch(row.nome || ""),
+    }));
+  }, [cartas]);
+
+  const filteredCartas = useMemo(() => {
+    return cartasWithSearch
+      .filter(({ row, search }) => {
+        if (deletedDocIds.has((row.doc_id || "").trim())) return false;
+
+        const f = cartasFilters;
+        if (f.search && !search.includes(normalizeSearch(f.search))) return false;
+        if (f.igreja && row.igreja_origem !== f.igreja) return false;
+        if (f.cargo && row.cargo !== f.cargo) return false;
+        if (f.status && row.status !== f.status) return false;
+        if (f.dateStart || f.dateEnd) {
+          const d = parseDate(row.data_emissao);
+          if (!d) return false;
+          if (f.dateStart && d < f.dateStart) return false;
+          if (f.dateEnd) {
+            const end = new Date(f.dateEnd);
+            end.setHours(23, 59, 59, 999);
+            if (d > end) return false;
+          }
         }
-      }
-      return true;
-    });
-  }, [cartas, cartasFilters, deletedDocIds]);
+        return true;
+      })
+      .map(({ row }) => row);
+  }, [cartasWithSearch, cartasFilters, deletedDocIds]);
 
   const cartasLookup = useMemo(() => {
     const normalizeName = (value: string) =>
@@ -255,6 +272,11 @@ const Index = () => {
         {needsAdminSetup && (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             Aguardando configuração do administrador (links ainda não cadastrados).
+          </div>
+        )}
+        {offline && (
+          <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+            Modo offline: exibindo dados do cache. Última sincronização: {lastSyncAt ? new Date(lastSyncAt).toLocaleString() : "—"}.
           </div>
         )}
 

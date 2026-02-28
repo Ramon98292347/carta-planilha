@@ -23,6 +23,8 @@ export function useSheetData() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
   const [hasObreiros, setHasObreiros] = useState(false);
   const [cartasSheetUsed, setCartasSheetUsed] = useState("");
   const initializedKeysRef = useRef(false);
@@ -364,6 +366,8 @@ export function useSheetData() {
       setHasObreiros(obOk);
       setCartasSheetUsed(usedSheet);
       setConnected(true);
+      setOffline(false);
+      setLastSyncAt(Date.now());
 
       if (!silent) {
         localStorage.setItem(STORAGE_KEY, inputUrl);
@@ -372,9 +376,18 @@ export function useSheetData() {
       }
     } catch (err: any) {
       logClientError(err?.message || "Erro ao conectar à planilha.", "connect");
+      let usedCache = false;
+      if (!silent) {
+        const cached = await fetchClientCache();
+        if (cached && cached.length > 0) {
+          setCartas(cached);
+          usedCache = true;
+        }
+      }
       if (!silent) {
         setError(err.message || "Erro ao conectar à planilha.");
-        setConnected(false);
+        setConnected(usedCache);
+        setOffline(usedCache);
       }
     } finally {
       if (!silent) setLoading(false);
@@ -430,5 +443,7 @@ export function useSheetData() {
     notifications,
     clearNotifications: () => setNotifications([]),
     sendStatusById,
+    offline,
+    lastSyncAt,
   };
 }
