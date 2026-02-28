@@ -13,12 +13,8 @@ export function MetricCards({ cartas, obreiros }: Props) {
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-  const fifteenDaysAgo = new Date(today);
-  fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
-
   let cartasHoje = 0;
   let cartas7d = 0;
-  let cartas15d = 0;
 
   cartas.forEach((row) => {
     const d = parseDate(row.data_emissao);
@@ -26,7 +22,6 @@ export function MetricCards({ cartas, obreiros }: Props) {
     d.setHours(0, 0, 0, 0);
     if (d.getTime() === today.getTime()) cartasHoje++;
     if (d >= sevenDaysAgo) cartas7d++;
-    if (d >= fifteenDaysAgo) cartas15d++;
   });
 
   // Count by cargo
@@ -43,7 +38,6 @@ export function MetricCards({ cartas, obreiros }: Props) {
     { label: "Total de Cartas", value: cartas.length, icon: FileText, cls: "metric-card-1" },
     { label: "Cartas Hoje", value: cartasHoje, icon: CalendarDays, cls: "metric-card-2" },
     { label: "Últimos 7 dias", value: cartas7d, icon: TrendingUp, cls: "metric-card-3" },
-    { label: "Últimos 15 dias", value: cartas15d, icon: TrendingUp, cls: "metric-card-3" },
     { label: "Total de Obreiros", value: obreiros.length, icon: Users, cls: "metric-card-4" },
   ];
 

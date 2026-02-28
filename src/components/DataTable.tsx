@@ -33,6 +33,10 @@ interface Props {
   detailFields?: DetailField[];
   enableDelete?: boolean;
   onDeleteSuccess?: (row: Record<string, string>) => void;
+  actionsVariant?: "full" | "detailsOnly";
+  highlightStatus?: boolean;
+  detailsSource?: "columns" | "all";
+  detailRowResolver?: (row: Record<string, string>) => Record<string, string>;
 }
 
 export function DataTable({
@@ -43,6 +47,10 @@ export function DataTable({
   detailFields,
   enableDelete = false,
   onDeleteSuccess,
+  actionsVariant = "full",
+  highlightStatus = true,
+  detailsSource = "columns",
+  detailRowResolver,
 }: Props) {
   const [page, setPage] = useState(0);
   const [detailRow, setDetailRow] = useState<Record<string, string> | null>(null);
@@ -79,6 +87,32 @@ export function DataTable({
       ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const openCartaForm = () => {
+    const googleFormUrl = (localStorage.getItem("google_form_url") || "").trim();
+    const googleSheetUrl = (localStorage.getItem("google_sheet_url") || "").trim();
+    const target = googleFormUrl || googleSheetUrl;
+    if (!target) {
+      toast.error("Link de carta não configurado.");
+      return;
+    }
+    window.open(target, "_blank", "noopener,noreferrer");
+  };
+
+  const isBlocked = (row: Record<string, string>) => {
+    const value = (row.status ?? row["__col_Z"] ?? row.Z ?? "").trim().toLowerCase();
+    return !!value && value !== "sim";
+  };
+
+  const shouldHighlightBlocked = (row: Record<string, string>) => highlightStatus && isBlocked(row);
+
+  const isImageUrl = (value: string, key?: string) => {
+    const v = (value || "").trim();
+    if (!v || !/^https?:\/\//i.test(v)) return false;
+    if (/\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i.test(v)) return true;
+    if (key && /(foto|imagem|image|photo)/i.test(key)) return true;
+    return false;
   };
 
   const openBlockForm = (row: Record<string, string>) => {
@@ -136,7 +170,16 @@ export function DataTable({
             <div className="py-6 text-center text-sm text-muted-foreground">Nenhum registro encontrado</div>
           ) : (
             pageData.map((row, i) => (
-              <div key={i} className="rounded-md border bg-background p-3">
+              <div
+                key={i}
+                className={`rounded-md border p-3 ${
+                  highlightStatus
+                    ? shouldHighlightBlocked(row)
+                      ? "border-rose-800 bg-rose-300/70 animate-pulse"
+                      : "border-emerald-400 bg-emerald-50"
+                    : "border-border bg-background"
+                }`}
+              >
                 <div className="space-y-2">
                   {visibleColumns.map((c) => (
                     <div key={c.key} className="grid grid-cols-[110px_1fr] gap-2 text-sm">
@@ -147,16 +190,69 @@ export function DataTable({
                     </div>
                   ))}
                 </div>
-                {showDetails && (
-                  <div className={`mt-3 grid gap-2 ${enableDelete ? "grid-cols-4" : "grid-cols-3"}`}>
-                    <Button variant="outline" size="sm" onClick={() => setDetailRow(row)} className="w-full text-xs">
+                {showDetails && actionsVariant === "detailsOnly" && (
+                  <div className="mt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(row) : row)}
+                      disabled={shouldHighlightBlocked(row)}
+                      className="w-full text-xs"
+                    >
                       <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => openBlockForm(row)} className="w-full text-xs">
+                  </div>
+                )}
+                {showDetails && actionsVariant === "full" && (
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(row) : row)}
+                      disabled={shouldHighlightBlocked(row)}
+                      className="w-full text-xs"
+                    >
+                      <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openBlockForm(row)}
+                      disabled={shouldHighlightBlocked(row)}
+                      className="w-full text-xs"
+                    >
                       Bloquear
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => shareOnWhatsApp(row)} className="w-full text-xs">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openCartaForm()}
+                      disabled={shouldHighlightBlocked(row)}
+                      className="w-full text-xs"
+                    >
+                      Carta
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => shareOnWhatsApp(row)}
+                      disabled={shouldHighlightBlocked(row)}
+                      className="w-full text-xs"
+                    >
                       <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const url = row.url_pdf;
+                        if (!url || isEmptyValue(url)) return;
+                        window.open(url, "_blank", "noopener,noreferrer");
+                      }}
+                      disabled={shouldHighlightBlocked(row) || !row.url_pdf || isEmptyValue(row.url_pdf)}
+                      className="w-full text-xs"
+                    >
+                      <ExternalLink className="mr-1 h-3.5 w-3.5" /> PDF
                     </Button>
                     {enableDelete && (
                       <Button
@@ -197,7 +293,16 @@ export function DataTable({
                 </TableRow>
               ) : (
                 pageData.map((row, i) => (
-                  <TableRow key={i}>
+                  <TableRow
+                    key={i}
+                    className={
+                      highlightStatus
+                        ? shouldHighlightBlocked(row)
+                          ? "bg-rose-300/60 animate-pulse"
+                          : "bg-emerald-50/60"
+                        : ""
+                    }
+                  >
                     {visibleColumns.map((c) => (
                       <TableCell key={c.key} className="text-sm">
                         {c.render ? c.render(row) : (isEmptyValue(row[c.key]) ? EMPTY : row[c.key])}
@@ -205,28 +310,66 @@ export function DataTable({
                     ))}
                     {showDetails && (
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => setDetailRow(row)} className="text-xs">
+                        {actionsVariant === "detailsOnly" ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(row) : row)}
+                            className="text-xs"
+                          >
                             <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => openBlockForm(row)} className="text-xs">
-                            Bloquear
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => shareOnWhatsApp(row)} className="text-xs">
-                            <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
-                          </Button>
-                          {enableDelete && (
+                        ) : (
+                          <div className="flex items-center gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => deleteCarta(row)}
-                              disabled={deletingKey === deleteKey(row)}
-                              className="text-xs text-rose-700 hover:text-rose-800"
+                              onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(row) : row)}
+                              disabled={shouldHighlightBlocked(row)}
+                              className="text-xs"
                             >
-                              <Trash2 className="mr-1 h-3.5 w-3.5" /> {deletingKey === deleteKey(row) ? "Excluindo..." : "Excluir"}
+                              <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
                             </Button>
-                          )}
-                        </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openBlockForm(row)}
+                              disabled={shouldHighlightBlocked(row)}
+                              className="text-xs"
+                            >
+                              Bloquear
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => shareOnWhatsApp(row)}
+                              disabled={shouldHighlightBlocked(row)}
+                              className="text-xs"
+                            >
+                              <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openCartaForm()}
+                              disabled={shouldHighlightBlocked(row)}
+                              className="text-xs"
+                            >
+                              Carta
+                            </Button>
+                            {enableDelete && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteCarta(row)}
+                                disabled={deletingKey === deleteKey(row)}
+                                className="text-xs text-rose-700 hover:text-rose-800"
+                              >
+                                <Trash2 className="mr-1 h-3.5 w-3.5" /> {deletingKey === deleteKey(row) ? "Excluindo..." : "Excluir"}
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </TableCell>
                     )}
                   </TableRow>
@@ -262,16 +405,46 @@ export function DataTable({
             <div className="space-y-2">
               {(detailFields
                 ? detailFields
-                : columns
-                    .map((c) => ({ key: c.key, label: c.label }))
-                    .filter(({ key }) => !isEmptyValue(detailRow[key]))
+                : detailsSource === "all"
+                  ? (() => {
+                      const items: DetailField[] = [];
+                      const used = new Set<string>();
+                      columns.forEach((c) => {
+                        if (!isEmptyValue(detailRow[c.key])) {
+                          items.push({ key: c.key, label: c.label });
+                          used.add(c.key);
+                        }
+                      });
+                      Object.keys(detailRow).forEach((key) => {
+                        if (used.has(key)) return;
+                        if (key.startsWith("__col_")) return;
+                        if (isEmptyValue(detailRow[key])) return;
+                        items.push({ key, label: key });
+                      });
+                      return items;
+                    })()
+                  : columns
+                      .map((c) => ({ key: c.key, label: c.label }))
+                      .filter(({ key }) => !isEmptyValue(detailRow[key]))
               ).map(({ key, label }) => {
                 const value = detailRow[key];
                 return (
                   <div key={key + label} className="flex gap-2 border-b pb-2 text-sm">
                     <span className="min-w-[140px] font-medium text-muted-foreground">{label}</span>
                     <span className="break-all text-foreground">
-                      {value && (value.startsWith("http://") || value.startsWith("https://")) ? (
+                      {value && isImageUrl(value, key) ? (
+                        <div className="flex w-full flex-col gap-2">
+                          <img
+                            src={value}
+                            alt={label}
+                            className="max-h-48 w-full rounded-md border object-cover"
+                            loading="lazy"
+                          />
+                          <a href={value} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary underline">
+                            Abrir imagem <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      ) : value && (value.startsWith("http://") || value.startsWith("https://")) ? (
                         <a href={value} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary underline">
                           Abrir link <ExternalLink className="h-3 w-3" />
                         </a>
@@ -334,16 +507,18 @@ export const CARTAS_COLUMNS: Column[] = [
     render: (r) => {
       const url = r.url_pdf;
       if (!url || url === "-" || url === "â€”") return EMPTY;
+      const statusValue = (r.status ?? r["__col_Z"] ?? r.Z ?? "").trim().toLowerCase();
+      const blocked = !!statusValue && statusValue !== "sim";
       return (
-        <a href={url} target="_blank" rel="noopener noreferrer">
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-sky-200 bg-sky-50 text-xs text-sky-700 hover:bg-sky-100 hover:text-sky-800"
-          >
-            <ExternalLink className="mr-1 h-3 w-3" /> Abrir PDF
-          </Button>
-        </a>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={blocked}
+          onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+          className="border-sky-200 bg-sky-50 text-xs text-sky-700 hover:bg-sky-100 hover:text-sky-800"
+        >
+          <ExternalLink className="mr-1 h-3 w-3" /> Abrir PDF
+        </Button>
       );
     },
   },

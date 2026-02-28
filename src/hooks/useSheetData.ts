@@ -150,7 +150,14 @@ export function useSheetData() {
         try {
           obreirosData = await fetchSheetData(id, sheet);
           if (obreirosData.length > 0) {
-            obreirosData = obreirosData.map(transformObreiroRow);
+            obreirosData = obreirosData.map((raw) => {
+              const normalized = transformObreiroRow(raw);
+              const merged: Record<string, string> = { ...raw, ...normalized };
+              Object.keys(merged).forEach((key) => {
+                if (key.startsWith("__col_")) delete merged[key];
+              });
+              return merged;
+            });
             obOk = true;
             break;
           }

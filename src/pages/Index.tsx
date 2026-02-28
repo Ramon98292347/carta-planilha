@@ -2,10 +2,10 @@
 import { useSheetData } from "@/hooks/useSheetData";
 import { MetricCards } from "@/components/MetricCards";
 import { Filters, FilterValues, emptyFilters } from "@/components/Filters";
-import { DataTable, CARTAS_COLUMNS } from "@/components/DataTable";
+import { DataTable, CARTAS_COLUMNS, OBREIROS_COLUMNS } from "@/components/DataTable";
 import { parseDate } from "@/lib/sheets";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, CheckCircle2, FileText, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, FileText, Loader2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 
@@ -69,6 +69,30 @@ const Index = () => {
     });
   }, [cartas, cartasFilters, deletedDocIds]);
 
+  const cartasLookup = useMemo(() => {
+    const normalizeName = (value: string) =>
+      (value || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, " ");
+    const normalizePhone = (value: string) => (value || "").replace(/\D/g, "");
+
+    const byName = new Map<string, Record<string, string>>();
+    const byPhone = new Map<string, Record<string, string>>();
+
+    cartas.forEach((row) => {
+      const nameKey = normalizeName(row.nome);
+      if (nameKey && !byName.has(nameKey)) byName.set(nameKey, row);
+
+      const phoneKey = normalizePhone(row.telefone);
+      if (phoneKey && !byPhone.has(phoneKey)) byPhone.set(phoneKey, row);
+    });
+
+    return { byName, byPhone, normalizeName, normalizePhone };
+  }, [cartas]);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card shadow-sm">
@@ -98,24 +122,6 @@ const Index = () => {
             <Button
               type="button"
               variant="outline"
-              disabled={!googleBlockFormUrl}
-              title={!googleBlockFormUrl ? "Link não configurado" : "Abrir formulário de bloqueio"}
-              onClick={() => window.open(googleBlockFormUrl, "_blank", "noopener,noreferrer")}
-            >
-              Bloquear
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!fazerCartaUrl}
-              title={!fazerCartaUrl ? "Link não configurado" : "Abrir formulário de carta"}
-              onClick={() => window.open(fazerCartaUrl, "_blank", "noopener,noreferrer")}
-            >
-              Fazer Carta
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
               onClick={() => {
                 disconnect();
                 [
@@ -133,8 +139,9 @@ const Index = () => {
                 ].forEach((k) => localStorage.removeItem(k));
                 navigate("/login", { replace: true });
               }}
+              className="gap-1"
             >
-              Deslogar
+              <LogOut className="h-4 w-4" /> Sair
             </Button>
           </div>
         </div>
@@ -164,6 +171,9 @@ const Index = () => {
                   <TabsTrigger value="cartas" className="gap-1.5">
                     <FileText className="h-4 w-4" /> Cartas ({filteredCartas.length})
                   </TabsTrigger>
+                  <TabsTrigger value="obreiros" className="gap-1.5">
+                    Obreiros ({obreiros.length})
+                  </TabsTrigger>
                 </TabsList>
               </div>
 
@@ -189,6 +199,27 @@ const Index = () => {
                       next.add((row.doc_id || "").trim());
                       return next;
                     });
+                  }}
+                />
+              </TabsContent>
+
+              <TabsContent value="obreiros" className="mt-4 space-y-4">
+                <DataTable
+                  data={obreiros}
+                  columns={OBREIROS_COLUMNS}
+                  hideEmptyColumns
+                  showDetails
+                  detailFields={CARTAS_DETAIL_FIELDS}
+                  actionsVariant="detailsOnly"
+                  highlightStatus={false}
+                  detailRowResolver={(row) => {
+                    const phoneKey = cartasLookup.normalizePhone(row.telefone);
+                    if (phoneKey) {
+                      const hit = cartasLookup.byPhone.get(phoneKey);
+                      if (hit) return hit;
+                    }
+                    const nameKey = cartasLookup.normalizeName(row.nome);
+                    return cartasLookup.byName.get(nameKey) ?? row;
                   }}
                 />
               </TabsContent>

@@ -176,6 +176,11 @@ const OBREIROS_ALIASES: Record<string, string[]> = {
   status: ["status", "Status", "__col_Z"],
   data_ordenacao: ["data_ordenacao", "data_ordenação", "data_ordenaÃ§Ã£o", "Data da Ordenação", "Data da OrdenaÃ§Ã£o", "Data da Ordenação", "Data da pregação.", "data_pregacao"],
   data_batismo: ["data_batismo", "Data do Batismo", "Data do batismo"],
+  telefone: ["telefone", "Telefone", "Celular", "WhatsApp"],
+  email: ["email", "E-mail", "e-mail", "Email"],
+  funcao: ["Função Ministerial ?", "FunÃ§Ã£o Ministerial ?", "funcao", "função"],
+  regiao: ["regiao", "região", "Qual região Pertence", "Qual regiÃ£o Pertence"],
+  foto: ["foto", "Foto", "imagem", "Imagem", "photo", "Photo", "url_foto", "URL Foto", "Link da foto", "Link Foto"],
   _ps: ["Ps", "ps"],
   _dic: ["Dic", "dic"],
   _ob: ["ob", "Ob"],
@@ -303,6 +308,11 @@ export function transformObreiroRow(raw: Record<string, string>): Record<string,
     status: get("status") || "-",
     data_ordenacao: get("data_ordenacao") || "-",
     data_batismo: get("data_batismo") || "-",
+    telefone: get("telefone") || "-",
+    email: get("email") || "-",
+    funcao: get("funcao") || "-",
+    regiao: get("regiao") || "-",
+    foto: get("foto") || "-",
   };
 }
 
