@@ -227,7 +227,7 @@ export function DataTable({
                       onClick={() => openBlockForm(row)}
                       className={`w-full text-xs ${
                         isBlocked(row)
-                          ? "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+                        ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                           : "border-rose-600 bg-rose-600 text-white hover:bg-rose-700"
                       }`}
                     >
@@ -344,7 +344,7 @@ export function DataTable({
                               variant="ghost"
                               size="sm"
                               onClick={() => openBlockForm(row)}
-                              className={`text-xs ${isBlocked(row) ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-rose-600 text-white hover:bg-rose-700"}`}
+                              className={`text-xs ${isBlocked(row) ? "bg-green-600 text-white hover:bg-green-700" : "bg-rose-600 text-white hover:bg-rose-700"}`}
                             >
                               {isBlocked(row) ? "Autorizar" : "Bloquear"}
                             </Button>
@@ -524,7 +524,7 @@ export const CARTAS_COLUMNS: Column[] = [
           size="sm"
           disabled={blocked}
           onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-          className="border-emerald-600 bg-emerald-600 text-xs text-white hover:bg-emerald-700"
+          className="border-green-600 bg-green-600 text-xs text-white hover:bg-green-700"
         >
           <ExternalLink className="mr-1 h-3 w-3" /> Abrir PDF
         </Button>
