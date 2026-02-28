@@ -222,9 +222,11 @@ export function DataTable({
                       size="sm"
                       onClick={() => openBlockForm(row)}
                       disabled={shouldHighlightBlocked(row)}
-                      className="w-full text-xs"
+                      className={`w-full text-xs ${
+                        isBlocked(row) ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50" : "border-rose-200 text-rose-700 hover:bg-rose-50"
+                      }`}
                     >
-                      Bloquear
+                      {isBlocked(row) ? "Autorizar" : "Bloquear"}
                     </Button>
                     <Button
                       variant="outline"
@@ -338,9 +340,9 @@ export function DataTable({
                               size="sm"
                               onClick={() => openBlockForm(row)}
                               disabled={shouldHighlightBlocked(row)}
-                              className="text-xs"
+                              className={`text-xs ${isBlocked(row) ? "text-emerald-700 hover:text-emerald-800" : "text-rose-700 hover:text-rose-800"}`}
                             >
-                              Bloquear
+                              {isBlocked(row) ? "Autorizar" : "Bloquear"}
                             </Button>
                             <Button
                               variant="ghost"
