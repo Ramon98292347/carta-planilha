@@ -218,15 +218,6 @@ export function useSheetData() {
               description: `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`,
             }
           );
-          const title =
-            recentRowsOnLogin.length === 1
-              ? "Ultima carta dos ultimos 2 minutos"
-              : `${recentRowsOnLogin.length} cartas nos ultimos 2 minutos`;
-          const body = `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`;
-          setNotifications((prev) => [
-            { id: `${Date.now()}-${latest.doc_id || latest.nome || "carta"}`, title, body, ts: Date.now() },
-            ...prev,
-          ]);
         }
 
         lastSeenCarimboMsRef.current = latestTs;
