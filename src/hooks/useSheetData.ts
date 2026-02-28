@@ -9,8 +9,8 @@ const PRIMARY_CARTAS_SHEET_ALT = "Respostas do Formulário 1";
 const PRIMARY_CARTAS_SHEET_ALT2 = "Respostas do formulário 1";
 const PRIMARY_CARTAS_SHEET_ALT3 = "Respostas do Formulario 1";
 const REFRESH_INTERVAL_MS = 10000;
-const RECENT_WINDOW_MS = 2 * 60 * 1000;
-const NOTIFY_WINDOW_MS = 2 * 60 * 1000;
+const RECENT_WINDOW_MS = 5 * 60 * 60 * 1000;
+const NOTIFY_WINDOW_MS = 5 * 60 * 60 * 1000;
 
 export function useSheetData() {
   const [url, setUrl] = useState(() => localStorage.getItem(STORAGE_KEY) || "");
@@ -204,6 +204,20 @@ export function useSheetData() {
                 .filter((item) => latestTs - item.ts <= RECENT_WINDOW_MS)
                 .map((item) => item.row)
             : [];
+
+        if (!previousTs && !silent && recentRowsOnLogin.length > 0) {
+          setNotifications(
+            recentRowsOnLogin.map((row) => {
+              const rowTs = parseCarimboDateTime(row.data_emissao)?.getTime() ?? Date.now();
+              return {
+                id: `${rowTs}-${row.doc_id || row.nome || "carta"}`,
+                title: "Carta recente",
+                body: `Nome: ${row.nome || "-"} | Origem: ${row.igreja_origem || "-"} | Destino: ${row.igreja_destino || "-"}`,
+                ts: rowTs,
+              };
+            })
+          );
+        }
 
         if (initializedKeysRef.current && newRows.length > 0) {
           const latest = newRows[0];
