@@ -448,7 +448,7 @@ export function DataTable({
                           size="sm"
                           onClick={() => openFolderForm(row)}
                           disabled={sendDisabled || shouldHighlightBlocked(row)}
-                          className="w-full text-xs order-7 border-teal-600 bg-teal-600 text-white hover:bg-teal-700"
+                          className="col-span-3 w-full text-xs order-7 border-teal-600 bg-teal-600 text-white hover:bg-teal-700"
                         >
                           {label}
                         </Button>
