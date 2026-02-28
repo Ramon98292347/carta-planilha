@@ -221,9 +221,10 @@ export function DataTable({
                       variant="outline"
                       size="sm"
                       onClick={() => openBlockForm(row)}
-                      disabled={shouldHighlightBlocked(row)}
                       className={`w-full text-xs ${
-                        isBlocked(row) ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50" : "border-rose-200 text-rose-700 hover:bg-rose-50"
+                        isBlocked(row)
+                          ? "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+                          : "border-rose-600 bg-rose-600 text-white hover:bg-rose-700"
                       }`}
                     >
                       {isBlocked(row) ? "Autorizar" : "Bloquear"}
@@ -339,8 +340,7 @@ export function DataTable({
                               variant="ghost"
                               size="sm"
                               onClick={() => openBlockForm(row)}
-                              disabled={shouldHighlightBlocked(row)}
-                              className={`text-xs ${isBlocked(row) ? "text-emerald-700 hover:text-emerald-800" : "text-rose-700 hover:text-rose-800"}`}
+                              className={`text-xs ${isBlocked(row) ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-rose-600 text-white hover:bg-rose-700"}`}
                             >
                               {isBlocked(row) ? "Autorizar" : "Bloquear"}
                             </Button>
