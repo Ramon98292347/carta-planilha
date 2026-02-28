@@ -5,9 +5,15 @@ import { Filters, FilterValues, emptyFilters } from "@/components/Filters";
 import { DataTable, CARTAS_COLUMNS, OBREIROS_COLUMNS } from "@/components/DataTable";
 import { parseDate } from "@/lib/sheets";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, CheckCircle2, FileText, Loader2, LogOut } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, FileText, Loader2, LogOut, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { canUsePush, getCurrentSubscription, getPushPermission, sendTestNotification, subscribeToPush } from "@/lib/push";
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
 
 const CARTAS_DETAIL_FIELDS = [
   { key: "regiao", label: "Qual região Pertence" },
@@ -28,6 +34,12 @@ const Index = () => {
   const [cartasFilters, setCartasFilters] = useState<FilterValues>(emptyFilters);
   const [deletedDocIds, setDeletedDocIds] = useState<Set<string>>(new Set());
   const didAutoConnect = useRef(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [pushReady, setPushReady] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushDenied, setPushDenied] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushTestLoading, setPushTestLoading] = useState(false);
 
   const churchName = (localStorage.getItem("church_name") || "").trim();
   const pastorName = (localStorage.getItem("pastor_name") || "").trim();
@@ -45,6 +57,67 @@ const Index = () => {
     didAutoConnect.current = true;
     connect(googleSheetUrl, customSheetName || undefined);
   }, [googleSheetUrl, connected, loading, connect, customSheetName]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const check = async () => {
+      if (!canUsePush()) {
+        if (active) {
+          setPushReady(false);
+          setPushEnabled(false);
+          setPushDenied(false);
+        }
+        return;
+      }
+      const permission = getPushPermission();
+      const subscription = await getCurrentSubscription();
+      if (!active) return;
+      setPushReady(true);
+      setPushEnabled(!!subscription);
+      setPushDenied(permission === "denied");
+    };
+    check();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    if (choice.outcome === "accepted") {
+      setInstallPrompt(null);
+    }
+  };
+
+  const handleEnablePush = async () => {
+    if (!canUsePush()) return;
+    setPushLoading(true);
+    const result = await subscribeToPush();
+    setPushLoading(false);
+    if (result.ok) {
+      setPushEnabled(true);
+      setPushDenied(false);
+    } else if (result.reason === "denied") {
+      setPushDenied(true);
+    }
+  };
+
+  const handleTestPush = async () => {
+    setPushTestLoading(true);
+    await sendTestNotification();
+    setPushTestLoading(false);
+  };
 
   const filteredCartas = useMemo(() => {
     return cartas.filter((row) => {
@@ -119,6 +192,21 @@ const Index = () => {
                 <AlertCircle className="h-5 w-5 text-muted-foreground" />
               )}
             </div>
+            {installPrompt && (
+              <Button type="button" variant="outline" onClick={handleInstall} className="gap-1">
+                <Download className="h-4 w-4" /> Instalar app
+              </Button>
+            )}
+            {pushReady && !pushEnabled && (
+              <Button type="button" variant="outline" onClick={handleEnablePush} disabled={pushLoading || pushDenied} className="gap-1">
+                <Bell className="h-4 w-4" /> {pushDenied ? "Notificações bloqueadas" : pushLoading ? "Ativando..." : "Ativar notificações"}
+              </Button>
+            )}
+            {pushReady && pushEnabled && (
+              <Button type="button" variant="outline" onClick={handleTestPush} disabled={pushTestLoading} className="gap-1">
+                <Bell className="h-4 w-4" /> {pushTestLoading ? "Testando..." : "Testar notificação"}
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"

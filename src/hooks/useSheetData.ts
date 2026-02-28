@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { extractSpreadsheetId, fetchSheetData, transformAcessoRow, transformCartaRow, transformObreiroRow } from "@/lib/sheets";
+import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 const STORAGE_KEY = "sheets_dashboard_url";
@@ -7,6 +8,7 @@ const STORAGE_SHEET_KEY = "sheets_dashboard_custom_sheet";
 const PRIMARY_CARTAS_SHEET = "Respostas ao formulário 1";
 const REFRESH_INTERVAL_MS = 10000;
 const RECENT_WINDOW_MS = 2 * 60 * 1000;
+const NOTIFY_WINDOW_MS = 5 * 60 * 1000;
 
 export function useSheetData() {
   const [url, setUrl] = useState(() => localStorage.getItem(STORAGE_KEY) || "");
@@ -193,9 +195,26 @@ export function useSheetData() {
 
         if (initializedKeysRef.current && newRows.length > 0) {
           const latest = newRows[0];
-          toast.info(newRows.length === 1 ? "Nova carta cadastrada" : `${newRows.length} novas cartas cadastradas`, {
-            description: `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`,
-          });
+          const latestTs = parseCarimboDateTime(latest.data_emissao)?.getTime() ?? 0;
+          const nowTs = Date.now();
+          if (latestTs && nowTs - latestTs <= NOTIFY_WINDOW_MS) {
+            toast.info(newRows.length === 1 ? "Nova carta cadastrada" : `${newRows.length} novas cartas cadastradas`, {
+              description: `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`,
+            });
+
+            supabase.functions.invoke("notify-carta", {
+              body: {
+                title: "Nova carta cadastrada",
+                body: `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`,
+                url: "/",
+                data: {
+                  nome: latest.nome || "-",
+                  igreja_origem: latest.igreja_origem || "-",
+                  igreja_destino: latest.igreja_destino || "-",
+                },
+              },
+            });
+          }
         }
 
         if (recentRowsOnLogin.length > 0) {
