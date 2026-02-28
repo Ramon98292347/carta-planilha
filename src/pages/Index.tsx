@@ -40,6 +40,7 @@ const Index = () => {
   const [pushDenied, setPushDenied] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [pushTestLoading, setPushTestLoading] = useState(false);
+  const autoPushRequested = useRef(false);
 
   const churchName = (localStorage.getItem("church_name") || "").trim();
   const pastorName = (localStorage.getItem("pastor_name") || "").trim();
@@ -90,6 +91,26 @@ const Index = () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!pushReady || pushEnabled || pushDenied || pushLoading) return;
+    if (autoPushRequested.current) return;
+    const alreadyTried = localStorage.getItem("push_auto_requested") === "true";
+    if (alreadyTried) {
+      autoPushRequested.current = true;
+      return;
+    }
+    autoPushRequested.current = true;
+    localStorage.setItem("push_auto_requested", "true");
+    subscribeToPush().then((result) => {
+      if (result.ok) {
+        setPushEnabled(true);
+        setPushDenied(false);
+      } else if (result.reason === "denied") {
+        setPushDenied(true);
+      }
+    });
+  }, [pushReady, pushEnabled, pushDenied, pushLoading]);
 
   const handleInstall = async () => {
     if (!installPrompt) return;
