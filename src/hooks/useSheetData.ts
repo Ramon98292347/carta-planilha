@@ -31,6 +31,27 @@ export function useSheetData() {
   const lastNotifiedTsRef = useRef<number | null>(null);
   const [notifications, setNotifications] = useState<{ id: string; title: string; body: string; ts: number }[]>([]);
 
+  const fetchClientCache = async () => {
+    const clientId = (localStorage.getItem("clientId") || "").trim();
+    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+
+    const headers = {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    };
+
+    try {
+      const params = new URLSearchParams({ select: "last_15_cards", limit: "1" });
+      params.set("client_id", `eq.${clientId}`);
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/client_cache?${params.toString()}`, { headers });
+      if (!response.ok) return null;
+      const payload = (await response.json().catch(() => [])) as { last_15_cards?: Record<string, string>[] }[];
+      return payload?.[0]?.last_15_cards ?? null;
+    } catch {
+      return null;
+    }
+  };
+
   const upsertClientCache = async (cartasRows: Record<string, string>[]) => {
     const clientId = (localStorage.getItem("clientId") || "").trim();
     if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
@@ -127,6 +148,12 @@ export function useSheetData() {
     }
 
     try {
+      if (!silent && !initializedKeysRef.current) {
+        const cached = await fetchClientCache();
+        if (cached && cached.length > 0) {
+          setCartas(cached);
+        }
+      }
       // Sempre prioriza a aba oficial de dados de cartas
       let cartasData: Record<string, string>[] = [];
       let usedSheet = "";
