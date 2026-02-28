@@ -1,4 +1,4 @@
-ï»¿export function extractSpreadsheetId(url: string): string | null {
+export function extractSpreadsheetId(url: string): string | null {
   const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
   return match ? match[1] : null;
 }
@@ -137,48 +137,81 @@ export function formatDate(date: Date | null): string {
 // --- Column alias mapping for CARTAS ---
 
 const CARTAS_ALIASES: Record<string, string[]> = {
-  data_emissao: ["Carimbo de data/hora", "carimbo_de_data/hora", "data_emissao", "data_emissÃƒÂ£o"],
-  regiao: ["Qual regiÃ£o Pertence", "Qual regiÃƒÂ£o Pertence", "qual_regiÃ£o_pertence", "qual_regiÃƒÂ£o_pertence", "regiao", "regiÃ£o"],
+  data_emissao: ["Carimbo de data/hora", "carimbo_de_data/hora", "data_emissao", "data_emissÃ£o", "__col_A"],
+  regiao: [
+    "Região",
+    "Regiao",
+    "regiao",
+    "região",
+    "Qual região Pertence",
+    "Qual regiÃ£o Pertence",
+    "qual_região_pertence",
+    "qual_regiÃ£o_pertence",
+    "__col_B",
+  ],
   igreja_origem: [
+    "Igreja que pertence",
+    "Qual Igreja Você Pertence?",
     "Qual Igreja VocÃª Pertence?",
-    "Qual Igreja VocÃƒÂª Pertence?",
+    "qual_igreja_você_pertence?",
     "qual_igreja_vocÃª_pertence?",
-    "qual_igreja_vocÃƒÂª_pertence?",
     "igreja_origem",
     "Qual Igreja Estadual?",
+    "__col_C",
   ],
-  nome: ["Nome completo", "nome_completo", "nome", "nome_obreiro"],
+  nome: ["Nome completo", "nome_completo", "nome", "nome_obreiro", "__col_D"],
   email: ["email", "E-mail", "e-mail", "Email"],
-  telefone: ["Telefone", "telefone"],
+  telefone: ["Telefone", "telefone", "__col_E"],
   data_pregacao: [
+    "Data da pregação",
+    "Data da pregação.",
     "Data da pregaÃ§Ã£o.",
-    "Data da pregaÃƒÂ§ÃƒÂ£o.",
+    "data_da_pregação.",
     "data_da_pregaÃ§Ã£o.",
-    "data_da_pregaÃƒÂ§ÃƒÂ£o.",
-    "Dia da pregaÃ§Ã£o",
-    "dia_da_pregaÃ§Ã£o",
+    "Dia da pregação",
+    "dia_da_pregação",
     "data_pregacao",
-    "data_pregaÃ§Ã£o",
+    "data_pregação",
     "Dia",
-    "MÃªs",
+    "Mês",
     "Ano",
-    "Dia da pregaÃ§Ã£o",
-    "MÃªs da pregaÃ§Ã£o",
-    "Ano da pregaÃ§Ã£o",
+    "Dia da pregação",
+    "Mês da pregação",
+    "Ano da pregação",
+    "__col_I",
   ],
   data_ordenacao: [
+    "Data da Ordenação",
     "Data da OrdenaÃ§Ã£o",
-    "Data da OrdenaÃƒÂ§ÃƒÂ£o",
-    "data_da_ordenaÃ§Ã£o",
-    "data_da_ordenaÃ§Ã£o",
+    "data_da_ordenação",
+    "data_da_ordenação",
     "data_ordenacao",
-    "Dia da OrdenaÃ§Ã£o",
-    "MÃªs da ordenaÃ§Ã£o",
-    "Ano da OrdemaÃ§Ã£o",
+    "Dia da Ordenação",
+    "Mês da ordenação",
+    "Ano da Ordemação",
+    "__col_F",
   ],
-  funcao: ["FunÃ§Ã£o Ministerial ?", "FunÃƒÂ§ÃƒÂ£o Ministerial ?", "funÃ§Ã£o_ministerial_?", "funÃƒÂ§ÃƒÂ£o_ministerial_?", "funcao", "funÃ§Ã£o"],
-  ipda_destino: ["IPDA Destino", "ipda_destino"],
-  igreja_destino: ["Qual Igreja vocÃª estÃ¡ indo pregar?", "Qual Igreja vocÃƒÂª estÃƒÂ¡ indo pregar?", "qual_igreja_vocÃª_estÃ¡_indo_pregar?", "qual_igreja_vocÃƒÂª_estÃƒÂ¡_indo_pregar?", "igreja_destino"],
+  funcao: [
+    "Função Ministerial",
+    "Função Ministerial ?",
+    "FunÃ§Ã£o Ministerial ?",
+    "função_ministerial",
+    "função_ministerial_?",
+    "funÃ§Ã£o_ministerial_?",
+    "funcao",
+    "função",
+    "__col_J",
+  ],
+  ipda_destino: ["IPDA Destino", "ipda_destino", "Igreja Destino", "__col_L"],
+  igreja_destino: [
+    "Igreja que vai pregar",
+    "Qual Igreja você está indo pregar?",
+    "Qual Igreja vocÃª estÃ¡ indo pregar?",
+    "qual_igreja_você_está_indo_pregar?",
+    "qual_igreja_vocÃª estÃ¡ indo pregar?",
+    "igreja_destino",
+    "__col_G",
+  ],
   status: ["status", "Status", "Status da carta", "Status Carta", "__col_Z", "Z", "Coluna Z"],
   status_merge: [
     "Status",
@@ -188,40 +221,51 @@ const CARTAS_ALIASES: Record<string, string[]> = {
     "Document Merge Status - Cartas",
     "Document Merge Status - cartas",
     "document_merge_status_-_cartas",
-    "Document Merge Status - Carta de PregaÃ§Ã£o",
+    "Document Merge Status - Carta de Pregação",
   ],
   url_pdf: [
+    "Merged Doc URL - catas",
     "Merged Doc URL - Cartas",
     "Merged Doc URL - cartas",
     "merged_doc_url_-_cartas",
+    "Link to merged Doc - catas",
     "Link to merged Doc - Cartas",
     "Link to merged Doc - cartas",
     "link_to_merged_doc_-_cartas",
     "url_pdf",
-    "Merged Doc URL - Carta de PregaÃ§Ã£o",
-    "Link to merged Doc - Carta de PregaÃ§Ã£o",
+    "Merged Doc URL - Carta de Pregação",
+    "Link to merged Doc - Carta de Pregação",
+    "__col_AB",
+    "__col_AC",
   ],
-  doc_id: ["Merged Doc ID - Cartas", "Merged Doc ID - cartas", "merged_doc_id_-_cartas", "doc_id", "Merged Doc ID - Carta de PregaÃ§Ã£o"],
+  doc_id: [
+    "Merged Doc ID - catas",
+    "Merged Doc ID - Cartas",
+    "Merged Doc ID - cartas",
+    "merged_doc_id_-_cartas",
+    "doc_id",
+    "Merged Doc ID - Carta de Pregação",
+    "__col_AA",
+  ],
   // cargo columns for derivation
   _ps: ["Ps", "ps"],
   _dic: ["Dic", "dic"],
   _ob: ["ob"],
   _mem: ["Mem", "mem"],
-  cargo: ["cargo", "FunÃ§Ã£o Ministerial ?", "FunÃƒÂ§ÃƒÂ£o Ministerial ?", "__col_Q"],
+  cargo: ["cargo", "Função Ministerial", "Função Ministerial ?", "FunÃ§Ã£o Ministerial ?", "__col_J"],
 };
-
 const OBREIROS_ALIASES: Record<string, string[]> = {
   nome: ["nome", "Nome", "Nome completo", "nome_completo"],
-  cargo: ["cargo", "FunÃ§Ã£o Ministerial ?", "FunÃƒÂ§ÃƒÂ£o Ministerial ?", "funcao", "funÃ§Ã£o"],
-  igreja: ["igreja", "igreja_origem", "Qual Igreja VocÃª Pertence?", "Qual Igreja VocÃƒÂª Pertence?", "Qual Igreja vocÃª estÃ¡ indo pregar?"],
-  campo: ["campo", "regiao", "regiÃ£o", "Qual regiÃ£o Pertence", "Qual regiÃƒÂ£o Pertence"],
+  cargo: ["cargo", "Função Ministerial ?", "FunÃ§Ã£o Ministerial ?", "funcao", "função"],
+  igreja: ["igreja", "igreja_origem", "Qual Igreja Você Pertence?", "Qual Igreja VocÃª Pertence?", "Qual Igreja você está indo pregar?"],
+  campo: ["campo", "regiao", "região", "Qual região Pertence", "Qual regiÃ£o Pertence"],
   status: ["status", "Status", "__col_Z"],
-  data_ordenacao: ["data_ordenacao", "data_ordenaÃ§Ã£o", "data_ordenaÃƒÂ§ÃƒÂ£o", "Data da OrdenaÃ§Ã£o", "Data da OrdenaÃƒÂ§ÃƒÂ£o", "Data da OrdenaÃ§Ã£o", "Data da pregaÃ§Ã£o.", "data_pregacao"],
+  data_ordenacao: ["data_ordenacao", "data_ordenação", "data_ordenaÃ§Ã£o", "Data da Ordenação", "Data da OrdenaÃ§Ã£o", "Data da Ordenação", "Data da pregação.", "data_pregacao"],
   data_batismo: ["data_batismo", "Data do Batismo", "Data do batismo"],
   telefone: ["telefone", "Telefone", "Celular", "WhatsApp"],
   email: ["email", "E-mail", "e-mail", "Email"],
-  funcao: ["FunÃ§Ã£o Ministerial ?", "FunÃƒÂ§ÃƒÂ£o Ministerial ?", "funcao", "funÃ§Ã£o"],
-  regiao: ["regiao", "regiÃ£o", "Qual regiÃ£o Pertence", "Qual regiÃƒÂ£o Pertence"],
+  funcao: ["Função Ministerial ?", "FunÃ§Ã£o Ministerial ?", "funcao", "função"],
+  regiao: ["regiao", "região", "Qual região Pertence", "Qual regiÃ£o Pertence"],
   foto: ["foto", "Foto", "imagem", "Imagem", "photo", "Photo", "url_foto", "URL Foto", "Link da foto", "Link Foto"],
   _ps: ["Ps", "ps"],
   _dic: ["Dic", "dic"],
@@ -233,8 +277,8 @@ const ACESSO_ALIASES: Record<string, string[]> = {
   email: ["email", "E-mail", "e-mail", "Email"],
   nome: ["nome", "Nome", "Nome completo"],
   telefone: ["telefone", "Telefone", "WhatsApp", "Celular"],
-  status: ["status", "Status", "Statu", "SituaÃ§Ã£o", "Situacao", "Acesso"],
-  motivo: ["motivo", "Motivo", "Motivo do bloqueio", "Justificativa", "ObservaÃ§Ã£o", "Observacao"],
+  status: ["status", "Status", "Statu", "Situação", "Situacao", "Acesso"],
+  motivo: ["motivo", "Motivo", "Motivo do bloqueio", "Justificativa", "Observação", "Observacao"],
 };
 
 function findByAliases(row: Record<string, string>, aliases: string[]): string {
@@ -263,7 +307,7 @@ function findByAliases(row: Record<string, string>, aliases: string[]): string {
 
 function normalizeCargoLabel(value: string): string {
   const raw = (value || "").trim();
-  if (!raw || raw === "-" || raw === "Ã¢â‚¬â€" || raw === "â€”") return "-";
+  if (!raw || raw === "-" || raw === "â€”" || raw === "—") return "-";
 
   const normalized = raw
     .toLowerCase()
@@ -271,7 +315,7 @@ function normalizeCargoLabel(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]/g, "");
 
-  if (normalized === "dic" || normalized === "diacono" || normalized === "diaconoa") return "DiÃ¡cono";
+  if (normalized === "dic" || normalized === "diacono" || normalized === "diaconoa") return "Diácono";
   if (normalized === "ps" || normalized === "pastor") return "Pastor";
   if (normalized === "ob" || normalized === "obreiro") return "Obreiro";
   if (normalized === "mem" || normalized === "membro") return "Membro";
@@ -295,7 +339,7 @@ export function transformCartaRow(raw: Record<string, string>): Record<string, s
     const ob = findByAliases(raw, CARTAS_ALIASES._ob);
     const mem = findByAliases(raw, CARTAS_ALIASES._mem);
     if (ps) cargo = "Pastor";
-    else if (dic) cargo = "DiÃ¡cono";
+    else if (dic) cargo = "Diácono";
     else if (ob) cargo = "Obreiro";
     else if (mem) cargo = "Membro";
   }
@@ -337,7 +381,7 @@ export function transformObreiroRow(raw: Record<string, string>): Record<string,
     const ob = findByAliases(raw, OBREIROS_ALIASES._ob);
     const mem = findByAliases(raw, OBREIROS_ALIASES._mem);
     if (ps) cargo = "Pastor";
-    else if (dic) cargo = "DiÃ¡cono";
+    else if (dic) cargo = "Diácono";
     else if (ob) cargo = "Obreiro";
     else if (mem) cargo = "Membro";
   }
@@ -371,7 +415,7 @@ export function transformAcessoRow(raw: Record<string, string>): Record<string, 
 
   return {
     email: email || "-",
-    // Alguns usuÃ¡rios preenchem o campo "email" com nome (ex.: MIGUEL)
+    // Alguns usuários preenchem o campo "email" com nome (ex.: MIGUEL)
     nome: nome || email || "-",
     telefone: get("telefone") || "-",
     status: get("status") || "-",
@@ -386,11 +430,11 @@ export async function fetchSheetData(
   const url = buildCsvUrl(spreadsheetId, sheetName);
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`NÃ£o foi possÃ­vel acessar a aba "${sheetName}". Verifique se a planilha estÃ¡ publicada na web.`);
+    throw new Error(`Não foi possível acessar a aba "${sheetName}". Verifique se a planilha está publicada na web.`);
   }
   const text = await response.text();
   if (text.includes("<!DOCTYPE html>") || text.includes("<html")) {
-    throw new Error(`A aba "${sheetName}" nÃ£o foi encontrada ou a planilha nÃ£o estÃ¡ pÃºblica. Publique via Arquivo -> Compartilhar -> Publicar na web.`);
+    throw new Error(`A aba "${sheetName}" não foi encontrada ou a planilha não está pública. Publique via Arquivo -> Compartilhar -> Publicar na web.`);
   }
   return parseCSV(text);
 }
@@ -399,5 +443,8 @@ export async function fetchSheetData(
 export function col(row: Record<string, string>, key: string): string {
   return row[key] || "-";
 }
+
+
+
 
 
