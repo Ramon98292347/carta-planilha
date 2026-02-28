@@ -50,6 +50,7 @@ interface Props {
   highlightStatus?: boolean;
   detailsSource?: "columns" | "all";
   detailRowResolver?: (row: Record<string, string>) => Record<string, string>;
+  sendStatusById?: Record<string, string>;
 }
 
 export function DataTable({
@@ -64,6 +65,7 @@ export function DataTable({
   highlightStatus = true,
   detailsSource = "columns",
   detailRowResolver,
+  sendStatusById = {},
 }: Props) {
   const [page, setPage] = useState(0);
   const [detailRow, setDetailRow] = useState<Record<string, string> | null>(null);
@@ -254,6 +256,19 @@ export function DataTable({
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
+  const getSendStatus = (row: Record<string, string>) => {
+    const id =
+      (row.doc_id || "").trim() ||
+      (row["Merged Doc ID - Cartas"] || "").trim() ||
+      (row["Merged Doc ID - cartas"] || "").trim() ||
+      (row["merged_doc_id_-_cartas"] || "").trim() ||
+      (row["Merged Doc ID - Carta de Pregação"] || "").trim() ||
+      (row["merged_doc_id_-_carta_de_pregacao"] || "").trim();
+    if (!id) return "";
+    const raw = sendStatusById[id] || "";
+    return raw.trim().toUpperCase();
+  };
+
   const deleteKey = (row: Record<string, string>) =>
     [row.doc_id, row.url_pdf, row.data_emissao, row.nome].map((v) => (v || "").trim()).join("|").toLowerCase();
 
@@ -366,15 +381,31 @@ export function DataTable({
                     >
                       Carta
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openFolderForm(row)}
-                      disabled={shouldHighlightBlocked(row)}
-                      className="w-full text-xs border-teal-600 bg-teal-600 text-white hover:bg-teal-700"
-                    >
-                      Enviar carta pasta
-                    </Button>
+                    {(() => {
+                      const sendStatus = getSendStatus(row);
+                      const sendDisabled = sendStatus === "ENVIADO";
+                      return (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openFolderForm(row)}
+                            disabled={sendDisabled || shouldHighlightBlocked(row)}
+                            className="w-full text-xs border-teal-600 bg-teal-600 text-white hover:bg-teal-700"
+                          >
+                            Enviar carta pasta
+                          </Button>
+                          {sendStatus === "ENVIADO" && (
+                            <div className="col-span-3 text-xs text-amber-700">Atenção: esta carta já foi enviada.</div>
+                          )}
+                          {sendStatus === "ERRO" && (
+                            <div className="col-span-3 text-xs text-amber-700">
+                              Atenção: houve erro no envio anterior. Tente novamente.
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                     <Button
                       variant="outline"
                       size="sm"
@@ -518,15 +549,31 @@ export function DataTable({
                             >
                               Carta
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openFolderForm(row)}
-                              disabled={shouldHighlightBlocked(row)}
-                              className="text-xs bg-teal-600 text-white hover:bg-teal-700"
-                            >
-                              Enviar carta pasta
-                            </Button>
+                            {(() => {
+                              const sendStatus = getSendStatus(row);
+                              const sendDisabled = sendStatus === "ENVIADO";
+                              return (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => openFolderForm(row)}
+                                    disabled={sendDisabled || shouldHighlightBlocked(row)}
+                                    className="text-xs bg-teal-600 text-white hover:bg-teal-700"
+                                  >
+                                    Enviar carta pasta
+                                  </Button>
+                                  {sendStatus === "ENVIADO" && (
+                                    <span className="text-xs text-amber-700">Atenção: esta carta já foi enviada.</span>
+                                  )}
+                                  {sendStatus === "ERRO" && (
+                                    <span className="text-xs text-amber-700">
+                                      Atenção: houve erro no envio anterior. Tente novamente.
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            })()}
                             {enableDelete && (
                               <Button
                                 variant="ghost"

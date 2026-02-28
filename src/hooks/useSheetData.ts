@@ -17,6 +17,7 @@ export function useSheetData() {
   const [customSheetName, setCustomSheetName] = useState(() => localStorage.getItem(STORAGE_SHEET_KEY) || "");
   const [cartas, setCartas] = useState<Record<string, string>[]>([]);
   const [obreiros, setObreiros] = useState<Record<string, string>[]>([]);
+  const [sendStatusById, setSendStatusById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
@@ -232,6 +233,31 @@ export function useSheetData() {
 
       setCartas(cartasData);
       setObreiros(obreirosData);
+
+      // Fetch "Respostas ao formulário 3" for send status
+      const fetchSendStatus = async () => {
+        const sheets = ["Respostas ao formulário 3", "Respostas ao Formulário 3", "Respostas do formulário 3"];
+        for (const sheet of sheets) {
+          try {
+            const raw = await fetchSheetData(id, sheet);
+            if (raw.length === 0) continue;
+            const nextMap: Record<string, string> = {};
+            raw.forEach((row) => {
+              const idValue = (row.ID || row.id || row["__col_B"] || "").toString().trim();
+              const statusValue = (row.status_enviados || row.status || row["__col_C"] || "").toString().trim();
+              if (idValue) nextMap[idValue] = statusValue;
+            });
+            setSendStatusById(nextMap);
+            return;
+          } catch {
+            // try next
+          }
+        }
+        setSendStatusById({});
+      };
+
+      fetchSendStatus();
+
       setHasObreiros(obOk);
       setCartasSheetUsed(usedSheet);
       setConnected(true);
@@ -299,5 +325,6 @@ export function useSheetData() {
     cartasSheetUsed,
     notifications,
     clearNotifications: () => setNotifications([]),
+    sendStatusById,
   };
 }

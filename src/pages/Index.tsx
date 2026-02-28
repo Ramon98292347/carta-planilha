@@ -28,7 +28,7 @@ const CARTAS_DETAIL_FIELDS = [
 ];
 
 const Index = () => {
-  const { cartas, obreiros, loading, connected, connect, disconnect, customSheetName, notifications, clearNotifications } = useSheetData();
+  const { cartas, obreiros, loading, connected, connect, disconnect, customSheetName, notifications, clearNotifications, sendStatusById } = useSheetData();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("cartas");
   const [cartasFilters, setCartasFilters] = useState<FilterValues>(emptyFilters);
@@ -260,6 +260,7 @@ const Index = () => {
                   showDetails
                   detailFields={CARTAS_DETAIL_FIELDS}
                   enableDelete
+                  sendStatusById={sendStatusById}
                   onDeleteSuccess={(row) => {
                     setDeletedDocIds((prev) => {
                       const next = new Set(prev);
