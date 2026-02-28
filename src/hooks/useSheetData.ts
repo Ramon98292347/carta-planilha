@@ -6,6 +6,8 @@ const STORAGE_KEY = "sheets_dashboard_url";
 const STORAGE_SHEET_KEY = "sheets_dashboard_custom_sheet";
 const PRIMARY_CARTAS_SHEET = "Respostas ao formulário 1";
 const PRIMARY_CARTAS_SHEET_ALT = "Respostas do Formulário 1";
+const PRIMARY_CARTAS_SHEET_ALT2 = "Respostas do formulário 1";
+const PRIMARY_CARTAS_SHEET_ALT3 = "Respostas do Formulario 1";
 const REFRESH_INTERVAL_MS = 10000;
 const RECENT_WINDOW_MS = 2 * 60 * 1000;
 const NOTIFY_WINDOW_MS = 2 * 60 * 1000;
@@ -70,7 +72,14 @@ export function useSheetData() {
       // Sempre prioriza a aba oficial de dados de cartas
       let cartasData: Record<string, string>[] = [];
       let usedSheet = "";
-      const cartasSheets = [PRIMARY_CARTAS_SHEET, PRIMARY_CARTAS_SHEET_ALT, "CARTAS_DB", "CARTAS"];
+      const cartasSheets = [
+        PRIMARY_CARTAS_SHEET,
+        PRIMARY_CARTAS_SHEET_ALT,
+        PRIMARY_CARTAS_SHEET_ALT2,
+        PRIMARY_CARTAS_SHEET_ALT3,
+        "CARTAS_DB",
+        "CARTAS",
+      ];
       if (sheetName?.trim() && !cartasSheets.includes(sheetName.trim())) {
         cartasSheets.push(sheetName.trim());
       }
