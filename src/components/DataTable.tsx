@@ -524,7 +524,7 @@ export const CARTAS_COLUMNS: Column[] = [
           size="sm"
           disabled={blocked}
           onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-          className="border-sky-200 bg-sky-50 text-xs text-sky-700 hover:bg-sky-100 hover:text-sky-800"
+          className="border-sky-600 bg-sky-600 text-xs text-white hover:bg-sky-700"
         >
           <ExternalLink className="mr-1 h-3 w-3" /> Abrir PDF
         </Button>
