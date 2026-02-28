@@ -206,7 +206,6 @@ export function useSheetData() {
           ) {
             const title = newRows.length === 1 ? "Nova carta cadastrada" : `${newRows.length} novas cartas cadastradas`;
             const body = `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`;
-            toast.info(title, { description: body });
             setNotifications((prev) => [
               { id: `${Date.now()}-${latest.doc_id || latest.nome || "carta"}`, title, body, ts: Date.now() },
               ...prev,
