@@ -102,12 +102,21 @@ export function DataTable({
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  const openCartaForm = () => {
+  const openCartaForm = (row: Record<string, string>) => {
     const googleFormUrl = (localStorage.getItem("google_form_url") || "").trim();
     const googleSheetUrl = (localStorage.getItem("google_sheet_url") || "").trim();
     const target = googleFormUrl || googleSheetUrl;
     if (!target) {
       toast.error("Link de carta não configurado.");
+      return;
+    }
+    const docId = (row.doc_id || "").trim();
+    if (googleFormUrl && docId) {
+      const url = buildFormUrl(googleFormUrl, {
+        [BLOCK_FORM_NAME_FIELD]: docId,
+        [BLOCK_FORM_STATUS_FIELD]: "FINAL",
+      });
+      window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
     window.open(target, "_blank", "noopener,noreferrer");
@@ -187,7 +196,7 @@ export function DataTable({
     }
 
     const preacherName = (row.preacher_name || row.nome || "").trim();
-    const statusValue = isBlocked(row) ? "AUTORIZADO" : "BLOQUEADO";
+    const statusValue = "FINAL";
     const url = buildFormUrl(baseUrl, {
       usp: "pp_url",
       [BLOCK_FORM_NAME_FIELD]: preacherName,
@@ -351,7 +360,7 @@ export function DataTable({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => openCartaForm()}
+                      onClick={() => openCartaForm(row)}
                       disabled={shouldHighlightBlocked(row)}
                       className="w-full text-xs border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700"
                     >
@@ -503,7 +512,7 @@ export function DataTable({
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => openCartaForm()}
+                              onClick={() => openCartaForm(row)}
                               disabled={shouldHighlightBlocked(row)}
                               className="text-xs bg-indigo-600 text-white hover:bg-indigo-700"
                             >
