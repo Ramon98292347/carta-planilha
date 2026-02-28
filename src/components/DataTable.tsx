@@ -102,7 +102,10 @@ export function DataTable({
 
   const isBlocked = (row: Record<string, string>) => {
     const value = (row.status ?? row["__col_Z"] ?? row.Z ?? "").trim().toLowerCase();
-    return !!value && value !== "sim";
+    if (!value) return false;
+    if (["sim", "autorizado"].includes(value)) return false;
+    if (["nao", "não", "bloqueado"].includes(value)) return true;
+    return value !== "sim";
   };
 
   const shouldHighlightBlocked = (row: Record<string, string>) => highlightStatus && isBlocked(row);
@@ -477,7 +480,7 @@ export const CARTAS_COLUMNS: Column[] = [
       if (!value || value === "-" || value === "â€”") return EMPTY;
 
       const normalized = value.trim().toLowerCase();
-      const authorized = normalized === "sim";
+      const authorized = ["sim", "autorizado"].includes(normalized);
       const reason = r.motivo_bloqueio && r.motivo_bloqueio !== "-" && r.motivo_bloqueio !== "â€”" ? r.motivo_bloqueio : "";
 
       return (
