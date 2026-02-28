@@ -10,10 +10,11 @@ import { supabase } from "@/lib/supabase";
 
 const PAGE_SIZE = 25;
 const EMPTY = "\u2014";
-const BLOCK_FORM_BASE_URL =
-  "https://docs.google.com/forms/d/e/1FAIpQLSfVxO25I8fXlTHyGy5QHPgAB2aA-1vwRy2jnXfCrH3pj14h-g/viewform";
 const BLOCK_FORM_NAME_FIELD = "entry.1208647889";
 const BLOCK_FORM_STATUS_FIELD = "entry.1791445451";
+const FOLDER_FORM_DOC_FIELD = "entry.1208647889";
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
+const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
 
 const isBlockedStatusValue = (value: string) => {
   const v = (value || "").trim().toLowerCase();
@@ -124,15 +125,124 @@ export function DataTable({
     return false;
   };
 
-  const openBlockForm = (row: Record<string, string>) => {
+  const buildFormUrl = (baseUrl: string, params: Record<string, string>) => {
+    const trimmed = (baseUrl || "").trim();
+    if (!trimmed) return "";
+    try {
+      const url = new URL(trimmed);
+      Object.entries(params).forEach(([k, v]) => {
+        url.searchParams.set(k, v ?? "");
+      });
+      return url.toString();
+    } catch {
+      const qs = new URLSearchParams(params).toString();
+      if (!qs) return trimmed;
+      return trimmed.includes("?") ? `${trimmed}&${qs}` : `${trimmed}?${qs}`;
+    }
+  };
+
+  const fetchClientField = async (field: "google_block_form_url" | "google_form_url_folder") => {
+    const clientId = (localStorage.getItem("clientId") || "").trim();
+    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return "";
+
+    const headers = {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    };
+
+    const tryFetch = async (filterKey: "id" | "client_id") => {
+      const params = new URLSearchParams({
+        select: field,
+        limit: "1",
+      });
+      params.set(filterKey, `eq.${clientId}`);
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/clients?${params.toString()}`, { headers });
+      if (!response.ok) return "";
+      const payload = (await response.json().catch(() => [])) as Record<string, string | null>[];
+      return (payload?.[0]?.[field] || "").trim();
+    };
+
+    try {
+      const byId = await tryFetch("id");
+      if (byId) return byId;
+      return await tryFetch("client_id");
+    } catch {
+      return "";
+    }
+  };
+
+  const openBlockForm = async (row: Record<string, string>) => {
+    const stored = (localStorage.getItem("google_block_form_url") || "").trim();
+    const fetched = await fetchClientField("google_block_form_url");
+    const baseUrl = fetched || stored;
+
+    if (fetched && fetched !== stored) {
+      localStorage.setItem("google_block_form_url", fetched);
+      window.location.reload();
+      return;
+    }
+    if (!baseUrl) {
+      toast.error("Link de bloqueio não configurado.");
+      return;
+    }
+
     const preacherName = (row.preacher_name || row.nome || "").trim();
     const statusValue = isBlocked(row) ? "AUTORIZADO" : "BLOQUEADO";
-    const params = new URLSearchParams();
-    params.set("usp", "pp_url");
-    if (preacherName) params.set(BLOCK_FORM_NAME_FIELD, preacherName);
-    params.set(BLOCK_FORM_STATUS_FIELD, statusValue);
-    const url = `${BLOCK_FORM_BASE_URL}?${params.toString()}`;
-    window.open(url, "_blank");
+    const url = buildFormUrl(baseUrl, {
+      usp: "pp_url",
+      [BLOCK_FORM_NAME_FIELD]: preacherName,
+      [BLOCK_FORM_STATUS_FIELD]: statusValue,
+    });
+    if (!url) {
+      toast.error("Link de bloqueio inválido.");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const openFolderForm = async (row: Record<string, string>) => {
+    const stored = (localStorage.getItem("google_form_url_folder") || "").trim();
+    const fetched = await fetchClientField("google_form_url_folder");
+    const baseUrl = fetched || stored;
+
+    if (fetched && fetched !== stored) {
+      localStorage.setItem("google_form_url_folder", fetched);
+    }
+    if (!baseUrl) {
+      toast.error("Link da pasta de cartas não configurado.");
+      return;
+    }
+
+    const findMergedDocId = () => {
+      const direct =
+        row.doc_id ||
+        row["Merged Doc ID - Cartas"] ||
+        row["Merged Doc ID - cartas"] ||
+        row["merged_doc_id_-_cartas"] ||
+        row["Merged Doc ID - Carta de Pregação"] ||
+        row["merged_doc_id_-_carta_de_pregacao"];
+      if (direct) return direct;
+
+      const key = Object.keys(row).find((k) => /merged\s*doc\s*id/i.test(k));
+      return key ? row[key] : "";
+    };
+
+    const docId = findMergedDocId();
+    const docIdValue = (docId || "").trim();
+    if (!docIdValue || docIdValue === "-" || docIdValue === "â€”") {
+      toast.error("Documento sem ID.");
+      return;
+    }
+
+    const url = buildFormUrl(baseUrl, {
+      usp: "pp_url",
+      [FOLDER_FORM_DOC_FIELD]: docIdValue,
+    });
+    if (!url) {
+      toast.error("Link da pasta de cartas inválido.");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const deleteKey = (row: Record<string, string>) =>
@@ -246,6 +356,15 @@ export function DataTable({
                       className="w-full text-xs border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700"
                     >
                       Carta
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openFolderForm(row)}
+                      disabled={shouldHighlightBlocked(row)}
+                      className="w-full text-xs border-teal-600 bg-teal-600 text-white hover:bg-teal-700"
+                    >
+                      Enviar carta pasta
                     </Button>
                     <Button
                       variant="outline"
@@ -389,6 +508,15 @@ export function DataTable({
                               className="text-xs bg-indigo-600 text-white hover:bg-indigo-700"
                             >
                               Carta
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openFolderForm(row)}
+                              disabled={shouldHighlightBlocked(row)}
+                              className="text-xs bg-teal-600 text-white hover:bg-teal-700"
+                            >
+                              Enviar carta pasta
                             </Button>
                             {enableDelete && (
                               <Button

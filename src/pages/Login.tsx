@@ -81,6 +81,54 @@ export default function Login() {
         localStorage.removeItem("needs_admin_setup");
       }
 
+      if (SUPABASE_URL && SUPABASE_ANON_KEY && result.clientId) {
+        const fetchClientLinks = async (filterKey: "id" | "client_id") => {
+          const params = new URLSearchParams({
+            select: "google_block_form_url,google_form_url_folder,google_form_url,google_sheet_url",
+            limit: "1",
+          });
+          params.set(filterKey, `eq.${result.clientId}`);
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/clients?${params.toString()}`, {
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+          });
+          if (!response.ok) return null;
+          const payload = (await response.json().catch(() => [])) as Array<{
+            google_block_form_url?: string | null;
+            google_form_url_folder?: string | null;
+            google_form_url?: string | null;
+            google_sheet_url?: string | null;
+          }>;
+          return payload?.[0] || null;
+        };
+
+        const applyIfChanged = (key: string, nextValue?: string | null) => {
+          const next = (nextValue || "").trim();
+          if (!next) return;
+          const current = (localStorage.getItem(key) || "").trim();
+          if (current === next) return;
+          localStorage.setItem(key, next);
+        };
+
+        try {
+          const byId = await fetchClientLinks("id");
+          const data = byId ?? (await fetchClientLinks("client_id"));
+          if (data) {
+            applyIfChanged("google_block_form_url", data.google_block_form_url);
+            applyIfChanged("google_form_url_folder", data.google_form_url_folder);
+            applyIfChanged("google_form_url", data.google_form_url);
+            applyIfChanged("google_sheet_url", data.google_sheet_url);
+            if (data.google_sheet_url) {
+              applyIfChanged("sheets_dashboard_url", data.google_sheet_url);
+            }
+          }
+        } catch {
+          // silent
+        }
+      }
+
       navigate("/", { replace: true });
     } catch {
       toast.error("Erro ao conectar no login");
