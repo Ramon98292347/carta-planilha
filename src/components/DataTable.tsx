@@ -356,7 +356,7 @@ export function DataTable({
                       size="sm"
                       onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(row) : row)}
                       disabled={shouldHighlightBlocked(row)}
-                      className="w-full text-xs"
+                      className="w-full text-xs order-1"
                     >
                       <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
                     </Button>
@@ -364,9 +364,9 @@ export function DataTable({
                       variant="outline"
                       size="sm"
                       onClick={() => openBlockForm(row)}
-                      className={`w-full text-xs ${
+                      className={`w-full text-xs order-2 ${
                         isBlocked(row)
-                        ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
+                          ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                           : "border-rose-600 bg-rose-600 text-white hover:bg-rose-700"
                       }`}
                     >
@@ -377,10 +377,62 @@ export function DataTable({
                       size="sm"
                       onClick={() => openCartaForm(row)}
                       disabled={shouldHighlightBlocked(row)}
-                      className="w-full text-xs border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700"
+                      className="w-full text-xs order-3 border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700"
                     >
                       Carta
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => shareOnWhatsApp(row)}
+                      disabled={shouldHighlightBlocked(row)}
+                      className="w-full text-xs order-4 border-orange-600 bg-orange-600 text-white hover:bg-orange-700"
+                    >
+                      <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const rawUrl =
+                          row.url_pdf ||
+                          row["Merged Doc URL - Cartas"] ||
+                          row["Merged Doc URL - cartas"] ||
+                          row["merged_doc_url_-_cartas"] ||
+                          row["Link to merged Doc - Cartas"] ||
+                          row["Link to merged Doc - cartas"] ||
+                          row["link_to_merged_doc_-_cartas"];
+                        const url = (rawUrl || "").trim();
+                        if (!url || isEmptyValue(url)) return;
+                        window.open(url, "_blank", "noopener,noreferrer");
+                      }}
+                      disabled={
+                        isBlocked(row) ||
+                        isEmptyValue(
+                          (row.url_pdf ||
+                            row["Merged Doc URL - Cartas"] ||
+                            row["Merged Doc URL - cartas"] ||
+                            row["merged_doc_url_-_cartas"] ||
+                            row["Link to merged Doc - Cartas"] ||
+                            row["Link to merged Doc - cartas"] ||
+                            row["link_to_merged_doc_-_cartas"]) as string
+                        )
+                      }
+                      className="w-full text-xs order-5 border-green-600 bg-green-600 text-white hover:bg-green-700"
+                    >
+                      <ExternalLink className="mr-1 h-3.5 w-3.5" /> PDF
+                    </Button>
+                    {enableDelete && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => deleteCarta(row)}
+                        disabled={deletingKey === deleteKey(row)}
+                        className="w-full text-xs order-6 border-rose-600 bg-rose-600 text-white hover:bg-rose-700"
+                      >
+                        <Trash2 className="mr-1 h-3.5 w-3.5" /> {deletingKey === deleteKey(row) ? "Excluindo..." : "Excluir"}
+                      </Button>
+                    )}
                     {(() => {
                       const sendStatus = getSendStatus(row);
                       const sendDisabled = sendStatus === "ENVIADO";
@@ -389,71 +441,19 @@ export function DataTable({
                           ? "Enviada"
                           : sendStatus === "ERRO"
                             ? "Erro no envio"
-                            : "Enviar carta pasta";
+                            : "Enviar pasta";
                       return (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => openFolderForm(row)}
                           disabled={sendDisabled || shouldHighlightBlocked(row)}
-                          className="w-full text-xs border-teal-600 bg-teal-600 text-white hover:bg-teal-700"
+                          className="w-full text-xs order-7 border-teal-600 bg-teal-600 text-white hover:bg-teal-700"
                         >
                           {label}
                         </Button>
                       );
                     })()}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => shareOnWhatsApp(row)}
-                      disabled={shouldHighlightBlocked(row)}
-                      className="w-full text-xs border-orange-600 bg-orange-600 text-white hover:bg-orange-700"
-                    >
-                      <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
-                    </Button>
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => {
-        const rawUrl =
-          row.url_pdf ||
-          row["Merged Doc URL - Cartas"] ||
-          row["Merged Doc URL - cartas"] ||
-          row["merged_doc_url_-_cartas"] ||
-          row["Link to merged Doc - Cartas"] ||
-          row["Link to merged Doc - cartas"] ||
-          row["link_to_merged_doc_-_cartas"];
-        const url = (rawUrl || "").trim();
-        if (!url || isEmptyValue(url)) return;
-        window.open(url, "_blank", "noopener,noreferrer");
-      }}
-      disabled={
-        isBlocked(row) ||
-        isEmptyValue(
-          (row.url_pdf ||
-            row["Merged Doc URL - Cartas"] ||
-            row["Merged Doc URL - cartas"] ||
-            row["merged_doc_url_-_cartas"] ||
-            row["Link to merged Doc - Cartas"] ||
-            row["Link to merged Doc - cartas"] ||
-            row["link_to_merged_doc_-_cartas"]) as string
-        )
-      }
-      className="w-full text-xs border-green-600 bg-green-600 text-white hover:bg-green-700"
-    >
-      <ExternalLink className="mr-1 h-3.5 w-3.5" /> PDF
-    </Button>
-                    {enableDelete && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deleteCarta(row)}
-                        disabled={deletingKey === deleteKey(row)}
-                        className="w-full text-xs border-rose-600 bg-rose-600 text-white hover:bg-rose-700"
-                      >
-                        <Trash2 className="mr-1 h-3.5 w-3.5" /> {deletingKey === deleteKey(row) ? "Excluindo..." : "Excluir"}
-                      </Button>
-                    )}
                   </div>
                 )}
               </div>
