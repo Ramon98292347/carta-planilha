@@ -13,10 +13,6 @@ const EMPTY = "\u2014";
 const BLOCK_FORM_NAME_FIELD = "entry.1208647889";
 const BLOCK_FORM_STATUS_FIELD = "entry.1791445451";
 const FOLDER_FORM_DOC_FIELD = "entry.1208647889";
-const DEFAULT_BLOCK_FORM_URL =
-  "https://docs.google.com/forms/d/e/1FAIpQLSeganP5XPzJErdQnGbMVMbuJJeRYIIWVdceTrCuNfoiPvLOug/viewform";
-const DEFAULT_FOLDER_FORM_URL =
-  "https://docs.google.com/forms/d/e/1FAIpQLScneK2WZfor8sTdsLkKkC4Go-vpmVwIME8N7iXo8ogoywY_5g/viewform";
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
 
@@ -187,7 +183,7 @@ export function DataTable({
   const openBlockForm = async (row: Record<string, string>) => {
     const stored = (localStorage.getItem("google_block_form_url") || "").trim();
     const fetched = await fetchClientField("google_block_form_url");
-    const baseUrl = fetched || stored || DEFAULT_BLOCK_FORM_URL;
+    const baseUrl = fetched || stored;
 
     if (fetched && fetched !== stored) {
       localStorage.setItem("google_block_form_url", fetched);
@@ -216,7 +212,7 @@ export function DataTable({
   const openFolderForm = async (row: Record<string, string>) => {
     const stored = (localStorage.getItem("google_form_url_folder") || "").trim();
     const fetched = await fetchClientField("google_form_url_folder");
-    const baseUrl = fetched || stored || DEFAULT_FOLDER_FORM_URL;
+    const baseUrl = fetched || stored;
 
     if (fetched && fetched !== stored) {
       localStorage.setItem("google_form_url_folder", fetched);
