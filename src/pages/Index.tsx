@@ -132,8 +132,8 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="flex w-full flex-col gap-1 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
-            <div className="flex items-center justify-between gap-2 sm:order-1">
+          <div className="flex w-full flex-row items-center justify-between gap-2 sm:w-auto sm:justify-start">
+            <div className="flex items-center gap-2">
               <div className="rounded-md border px-2 py-1 text-xs text-muted-foreground" title={connectedHeader ? "Conectado" : "Configuração incompleta"}>
                 <div>Igreja: {churchName || "—"}</div>
                 <div>Pastor: {pastorName || "—"}</div>
@@ -147,17 +147,17 @@ const Index = () => {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 sm:order-2">
+            <div className="flex items-center gap-2">
               {installPrompt && (
                 <Button type="button" variant="outline" onClick={handleInstall} className="gap-1">
                   <Download className="h-4 w-4" /> Instalar app
                 </Button>
               )}
-              <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:items-center">
+              <div className="flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="outline" className="relative w-full justify-center gap-1">
-                      <Bell className="h-4 w-4" /> Notificacoes
+                    <Button type="button" variant="outline" className="relative h-9 w-9 p-0">
+                      <Bell className="h-4 w-4" />
                       {notifications.length > 0 && (
                         <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
                           {notifications.length}
@@ -204,7 +204,7 @@ const Index = () => {
                     ].forEach((k) => localStorage.removeItem(k));
                     navigate("/login", { replace: true });
                   }}
-                  className="w-full justify-center gap-1"
+                  className="gap-1"
                 >
                   <LogOut className="h-4 w-4" /> Sair
                 </Button>
