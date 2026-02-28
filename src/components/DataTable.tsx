@@ -532,10 +532,15 @@ export const CARTAS_COLUMNS: Column[] = [
           variant="outline"
           size="sm"
           asChild
-          className="border-sky-200 bg-sky-50 text-xs text-sky-700 hover:bg-sky-100 hover:text-sky-800"
+          className="border-sky-200 bg-sky-50 text-xs text-sky-700 hover:bg-sky-100 hover:text-sky-800 whitespace-nowrap"
         >
-          <a href={url} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="mr-1 h-3 w-3" /> Abrir PDF
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-1.5"
+          >
+            <ExternalLink className="h-3 w-3" /> Abrir PDF
           </a>
         </Button>
       );
