@@ -22,6 +22,7 @@ export function useSheetData() {
   const initializedKeysRef = useRef(false);
   const syncInFlightRef = useRef(false);
   const lastSeenCarimboMsRef = useRef<number | null>(null);
+  const lastNotifiedTsRef = useRef<number | null>(null);
   const [notifications, setNotifications] = useState<{ id: string; title: string; body: string; ts: number }[]>([]);
 
   const normalize = (v: string) =>
@@ -197,7 +198,12 @@ export function useSheetData() {
           const latest = newRows[0];
           const latestTs = parseCarimboDateTime(latest.data_emissao)?.getTime() ?? 0;
           const nowTs = Date.now();
-          if (latestTs && nowTs - latestTs <= NOTIFY_WINDOW_MS) {
+          if (
+            latestTs &&
+            nowTs - latestTs <= NOTIFY_WINDOW_MS &&
+            latestTs <= nowTs &&
+            (lastNotifiedTsRef.current == null || latestTs > lastNotifiedTsRef.current)
+          ) {
             const title = newRows.length === 1 ? "Nova carta cadastrada" : `${newRows.length} novas cartas cadastradas`;
             const body = `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`;
             toast.info(title, { description: body });
@@ -205,6 +211,7 @@ export function useSheetData() {
               { id: `${Date.now()}-${latest.doc_id || latest.nome || "carta"}`, title, body, ts: Date.now() },
               ...prev,
             ]);
+            lastNotifiedTsRef.current = latestTs;
           }
         }
 
