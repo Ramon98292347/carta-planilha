@@ -15,6 +15,17 @@ const BLOCK_FORM_BASE_URL =
 const BLOCK_FORM_NAME_FIELD = "entry.1208647889";
 const BLOCK_FORM_STATUS_FIELD = "entry.1791445451";
 
+const isBlockedStatusValue = (value: string) => {
+  const v = (value || "").trim().toLowerCase();
+  if (!v) return false;
+  if (["sim", "autorizado"].includes(v)) return false;
+  if (["nao", "não", "bloqueado"].includes(v)) return true;
+  return v !== "sim";
+};
+
+const isBlockedRow = (row: Record<string, string>) =>
+  isBlockedStatusValue((row.status ?? row["__col_Z"] ?? row.Z ?? "") as string);
+
 interface Column {
   key: string;
   label: string;
@@ -101,13 +112,7 @@ export function DataTable({
     window.open(target, "_blank", "noopener,noreferrer");
   };
 
-  const isBlocked = (row: Record<string, string>) => {
-    const value = (row.status ?? row["__col_Z"] ?? row.Z ?? "").trim().toLowerCase();
-    if (!value) return false;
-    if (["sim", "autorizado"].includes(value)) return false;
-    if (["nao", "não", "bloqueado"].includes(value)) return true;
-    return value !== "sim";
-  };
+  const isBlocked = (row: Record<string, string>) => isBlockedRow(row);
 
   const shouldHighlightBlocked = (row: Record<string, string>) => highlightStatus && isBlocked(row);
 
@@ -542,6 +547,7 @@ export const CARTAS_COLUMNS: Column[] = [
         r["Link to merged Doc - cartas"] ||
         r["link_to_merged_doc_-_cartas"];
       if (!url || url === "-" || url === "â€”") return EMPTY;
+      const blocked = isBlockedRow(r as Record<string, string>);
       return blocked ? (
         <Button
           variant="outline"
