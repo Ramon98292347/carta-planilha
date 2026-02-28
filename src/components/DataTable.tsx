@@ -251,19 +251,38 @@ export function DataTable({
                     >
                       <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const url = row.url_pdf;
-                        if (!url || isEmptyValue(url)) return;
-                        window.open(url, "_blank", "noopener,noreferrer");
-                      }}
-                      disabled={shouldHighlightBlocked(row) || !row.url_pdf || isEmptyValue(row.url_pdf)}
-                      className="w-full text-xs border-sky-600 bg-sky-600 text-white hover:bg-sky-700"
-                    >
-                      <ExternalLink className="mr-1 h-3.5 w-3.5" /> PDF
-                    </Button>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        const rawUrl =
+          row.url_pdf ||
+          row["Merged Doc URL - Cartas"] ||
+          row["Merged Doc URL - cartas"] ||
+          row["merged_doc_url_-_cartas"] ||
+          row["Link to merged Doc - Cartas"] ||
+          row["Link to merged Doc - cartas"] ||
+          row["link_to_merged_doc_-_cartas"];
+        const url = (rawUrl || "").trim();
+        if (!url || isEmptyValue(url)) return;
+        window.open(url, "_blank", "noopener,noreferrer");
+      }}
+      disabled={
+        shouldHighlightBlocked(row) ||
+        isEmptyValue(
+          (row.url_pdf ||
+            row["Merged Doc URL - Cartas"] ||
+            row["Merged Doc URL - cartas"] ||
+            row["merged_doc_url_-_cartas"] ||
+            row["Link to merged Doc - Cartas"] ||
+            row["Link to merged Doc - cartas"] ||
+            row["link_to_merged_doc_-_cartas"]) as string
+        )
+      }
+      className="w-full text-xs border-sky-600 bg-sky-600 text-white hover:bg-sky-700"
+    >
+      <ExternalLink className="mr-1 h-3.5 w-3.5" /> PDF
+    </Button>
                     {enableDelete && (
                       <Button
                         variant="outline"
@@ -514,7 +533,14 @@ export const CARTAS_COLUMNS: Column[] = [
     key: "url_pdf",
     label: "PDF",
     render: (r) => {
-      const url = r.url_pdf;
+      const url =
+        r.url_pdf ||
+        r["Merged Doc URL - Cartas"] ||
+        r["Merged Doc URL - cartas"] ||
+        r["merged_doc_url_-_cartas"] ||
+        r["Link to merged Doc - Cartas"] ||
+        r["Link to merged Doc - cartas"] ||
+        r["link_to_merged_doc_-_cartas"];
       if (!url || url === "-" || url === "â€”") return EMPTY;
       const statusValue = (r.status ?? r["__col_Z"] ?? r.Z ?? "").trim().toLowerCase();
       const blocked = !!statusValue && statusValue !== "sim";
