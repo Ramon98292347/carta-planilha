@@ -132,77 +132,82 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="rounded-md border px-2 py-1 text-xs text-muted-foreground" title={connectedHeader ? "Conectado" : "Configuração incompleta"}>
-              <div>Igreja: {churchName || "—"}</div>
-              <div>Pastor: {pastorName || "—"}</div>
-            </div>
-            <div title={connectedHeader ? "Conectado" : "Configuração incompleta"}>
-              {connectedHeader ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              ) : (
-                <AlertCircle className="h-5 w-5 text-muted-foreground" />
-              )}
-            </div>
-            {installPrompt && (
-              <Button type="button" variant="outline" onClick={handleInstall} className="gap-1">
-                <Download className="h-4 w-4" /> Instalar app
-              </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline" className="relative gap-1">
-                  <Bell className="h-4 w-4" /> Notificacoes
-                  {notifications.length > 0 && (
-                    <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
-                      {notifications.length}
-                    </span>
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80">
-                <DropdownMenuLabel>Notificacoes</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {notifications.length === 0 ? (
-                  <DropdownMenuItem className="text-muted-foreground">Sem notificacoes</DropdownMenuItem>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
+            <div className="flex items-center gap-2 sm:order-1">
+              <div className="rounded-md border px-2 py-1 text-xs text-muted-foreground" title={connectedHeader ? "Conectado" : "Configuração incompleta"}>
+                <div>Igreja: {churchName || "—"}</div>
+                <div>Pastor: {pastorName || "—"}</div>
+              </div>
+              <div title={connectedHeader ? "Conectado" : "Configuração incompleta"}>
+                {connectedHeader ? (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                 ) : (
-                  notifications.slice(0, 8).map((n) => (
-                    <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1">
-                      <span className="text-xs font-semibold">{n.title}</span>
-                      <span className="text-xs text-muted-foreground">{n.body}</span>
-                    </DropdownMenuItem>
-                  ))
+                  <AlertCircle className="h-5 w-5 text-muted-foreground" />
                 )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={clearNotifications} className="text-xs text-rose-700">
-                  Limpar notificacoes
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                disconnect();
-                [
-                  "session_key",
-                  "clientId",
-                  "church_name",
-                  "pastor_name",
-                  "google_sheet_url",
-                  "google_form_url",
-                  "google_block_form_url",
-                  "needs_admin_setup",
-                  "DELETE_API_URL",
-                  "DELETE_API_KEY",
-                  "sheets_dashboard_url",
-                ].forEach((k) => localStorage.removeItem(k));
-                navigate("/login", { replace: true });
-              }}
-              className="gap-1"
-            >
-              <LogOut className="h-4 w-4" /> Sair
-            </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 sm:order-2">
+              {installPrompt && (
+                <Button type="button" variant="outline" onClick={handleInstall} className="gap-1">
+                  <Download className="h-4 w-4" /> Instalar app
+                </Button>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" className="relative gap-1">
+                    <Bell className="h-4 w-4" /> Notificacoes
+                    {notifications.length > 0 && (
+                      <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+                        {notifications.length}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80">
+                  <DropdownMenuLabel>Notificacoes</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {notifications.length === 0 ? (
+                    <DropdownMenuItem className="text-muted-foreground">Sem notificacoes</DropdownMenuItem>
+                  ) : (
+                    notifications.slice(0, 8).map((n) => (
+                      <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1">
+                        <span className="text-xs font-semibold">{n.title}</span>
+                        <span className="text-xs text-muted-foreground">{n.body}</span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={clearNotifications} className="text-xs text-rose-700">
+                    Limpar notificacoes
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  disconnect();
+                  [
+                    "session_key",
+                    "clientId",
+                    "church_name",
+                    "pastor_name",
+                    "google_sheet_url",
+                    "google_form_url",
+                    "google_block_form_url",
+                    "needs_admin_setup",
+                    "DELETE_API_URL",
+                    "DELETE_API_KEY",
+                    "sheets_dashboard_url",
+                  ].forEach((k) => localStorage.removeItem(k));
+                  navigate("/login", { replace: true });
+                }}
+                className="gap-1"
+              >
+                <LogOut className="h-4 w-4" /> Sair
+              </Button>
+            </div>
           </div>
         </div>
       </header>
