@@ -247,7 +247,7 @@ export function DataTable({
                       size="sm"
                       onClick={() => shareOnWhatsApp(row)}
                       disabled={shouldHighlightBlocked(row)}
-                      className="w-full text-xs border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+                      className="w-full text-xs border-orange-600 bg-orange-600 text-white hover:bg-orange-700"
                     >
                       <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
                     </Button>
@@ -353,7 +353,7 @@ export function DataTable({
                               size="sm"
                               onClick={() => shareOnWhatsApp(row)}
                               disabled={shouldHighlightBlocked(row)}
-                              className="text-xs bg-emerald-600 text-white hover:bg-emerald-700"
+                              className="text-xs bg-orange-600 text-white hover:bg-orange-700"
                             >
                               <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
                             </Button>
@@ -524,7 +524,7 @@ export const CARTAS_COLUMNS: Column[] = [
           size="sm"
           disabled={blocked}
           onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-          className="border-sky-600 bg-sky-600 text-xs text-white hover:bg-sky-700"
+          className="border-emerald-600 bg-emerald-600 text-xs text-white hover:bg-emerald-700"
         >
           <ExternalLink className="mr-1 h-3 w-3" /> Abrir PDF
         </Button>
