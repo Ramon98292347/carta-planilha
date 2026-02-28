@@ -214,17 +214,7 @@ export function useSheetData() {
           }
         }
 
-        if (recentRowsOnLogin.length > 0) {
-          const latest = recentRowsOnLogin[0];
-          toast.info(
-            recentRowsOnLogin.length === 1
-              ? "Última carta dos últimos 2 minutos"
-              : `${recentRowsOnLogin.length} cartas nos últimos 2 minutos`,
-            {
-              description: `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`,
-            }
-          );
-        }
+        // Sem toast no login. Notificacoes ficam apenas no sininho.
 
         lastSeenCarimboMsRef.current = latestTs;
       }
