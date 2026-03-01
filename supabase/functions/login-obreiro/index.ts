@@ -99,6 +99,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    const currentHash = (obreiro.senha_hash || "").trim();
+    if (!currentHash) {
+      const senhaHash = await bcrypt.hash(password, 10);
+      await supabase.from("obreiros_auth").update({ senha_hash: senhaHash }).eq("id", obreiro.id);
+      obreiro.senha_hash = senhaHash;
+    }
+
     const statusValue = (obreiro.status || "").trim().toLowerCase();
     if (["bloqueado", "nao", "não"].includes(statusValue)) {
       return new Response(JSON.stringify({ ok: false, error: "Obreiro bloqueado" }), {
