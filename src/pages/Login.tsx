@@ -67,7 +67,12 @@ export default function Login() {
 
       const result = (await response.json().catch(() => ({}))) as LoginResponse;
       if (!response.ok || !result?.ok || !result.session_key) {
-        toast.error(result?.error || "Falha no login. Verifique os dados.");
+        const msg = (result?.error || "").trim();
+        if (msg) {
+          toast.error(msg);
+        } else {
+          toast.error("Falha no login. Verifique os dados.");
+        }
         return;
       }
 

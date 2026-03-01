@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return new Response(JSON.stringify({ ok: false, error: "Missing env" }), {
+    return new Response(JSON.stringify({ ok: false, error: "Configuração do Supabase ausente." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     const password = (body.password || "").trim();
 
     if (!totvs || !phone || !password) {
-      return new Response(JSON.stringify({ ok: false, error: "Missing data" }), {
+      return new Response(JSON.stringify({ ok: false, error: "Preencha TOTVS, telefone e senha." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       .limit(1);
 
     if (clientErr || !clients || clients.length === 0) {
-      return new Response(JSON.stringify({ ok: false, error: "Igreja não encontrada" }), {
+      return new Response(JSON.stringify({ ok: false, error: "TOTVS não encontrado. Procure o pastor." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     }
 
     if (!obreiro) {
-      return new Response(JSON.stringify({ ok: false, error: "Obreiro não encontrado" }), {
+      return new Response(JSON.stringify({ ok: false, error: "Obreiro não encontrado na base. Procure o pastor." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -108,15 +108,18 @@ Deno.serve(async (req) => {
 
     const statusValue = (obreiro.status || "").trim().toLowerCase();
     if (["bloqueado", "nao", "não"].includes(statusValue)) {
-      return new Response(JSON.stringify({ ok: false, error: "Seu pastor te bloqueou. Procure ele para acessar o seu registro." }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ ok: false, error: "Seu pastor te bloqueou. Procure ele para acessar o seu registro." }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     const ok = await bcrypt.compare(password, obreiro.senha_hash);
     if (!ok) {
-      return new Response(JSON.stringify({ ok: false, error: "Senha inválida" }), {
+      return new Response(JSON.stringify({ ok: false, error: "Senha incorreta. Tente novamente." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -133,7 +136,7 @@ Deno.serve(async (req) => {
     });
 
     if (sessionErr) {
-      return new Response(JSON.stringify({ ok: false, error: "Erro ao criar sessão" }), {
+      return new Response(JSON.stringify({ ok: false, error: "Erro ao criar sessão. Tente novamente." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -162,7 +165,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+    return new Response(JSON.stringify({ ok: false, error: "Falha inesperada no login." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
