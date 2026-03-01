@@ -251,10 +251,15 @@ const Index = () => {
                       "google_sheet_url",
                       "google_form_url",
                       "google_block_form_url",
+                      "google_form_url_folder",
                       "needs_admin_setup",
                       "DELETE_API_URL",
                       "DELETE_API_KEY",
                       "sheets_dashboard_url",
+                      "user_role",
+                      "obreiro_nome",
+                      "obreiro_telefone",
+                      "obreiro_status",
                     ].forEach((k) => localStorage.removeItem(k));
                     navigate("/login", { replace: true });
                   }}

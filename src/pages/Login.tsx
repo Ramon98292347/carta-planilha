@@ -16,16 +16,22 @@ type LoginResponse = {
   clientId?: string;
   church_name?: string | null;
   pastor_name?: string | null;
+  obreiro_name?: string | null;
+  obreiro_phone?: string | null;
+  obreiro_status?: string | null;
   google_sheet_url?: string | null;
   google_form_url?: string | null;
   google_block_form_url?: string | null;
+  google_form_url_folder?: string | null;
   needs_admin_setup?: boolean;
   error?: string;
 };
 
 export default function Login() {
   const navigate = useNavigate();
+  const [mode, setMode] = useState<"pastor" | "obreiro">("pastor");
   const [totvsId, setTotvsId] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [adminMsg, setAdminMsg] = useState("");
@@ -33,6 +39,7 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!totvsId.trim() || !password.trim()) return;
+    if (mode === "obreiro" && !phone.trim()) return;
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       toast.error("Configuração do Supabase ausente");
@@ -43,7 +50,8 @@ export default function Login() {
     setAdminMsg("");
 
     try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/login`, {
+      const endpoint = mode === "obreiro" ? "login-obreiro" : "login";
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -53,12 +61,13 @@ export default function Login() {
         body: JSON.stringify({
           totvs_church_id: totvsId.trim(),
           password: password.trim(),
+          phone: phone.trim(),
         }),
       });
 
       const result = (await response.json().catch(() => ({}))) as LoginResponse;
       if (!response.ok || !result?.ok || !result.session_key) {
-        toast.error("Falha no login. Verifique TOTVS ID e senha.");
+        toast.error(result?.error || "Falha no login. Verifique os dados.");
         return;
       }
 
@@ -69,6 +78,7 @@ export default function Login() {
       localStorage.setItem("google_sheet_url", result.google_sheet_url || "");
       localStorage.setItem("google_form_url", result.google_form_url || "");
       localStorage.setItem("google_block_form_url", result.google_block_form_url || "");
+      localStorage.setItem("google_form_url_folder", result.google_form_url_folder || "");
 
       if (result.google_sheet_url) {
         localStorage.setItem("sheets_dashboard_url", result.google_sheet_url);
@@ -129,7 +139,16 @@ export default function Login() {
         }
       }
 
-      navigate("/", { replace: true });
+      if (mode === "obreiro") {
+        localStorage.setItem("user_role", "obreiro");
+        localStorage.setItem("obreiro_nome", result.obreiro_name || "");
+        localStorage.setItem("obreiro_telefone", result.obreiro_phone || phone.trim());
+        localStorage.setItem("obreiro_status", result.obreiro_status || "");
+        navigate("/obreiro", { replace: true });
+      } else {
+        localStorage.setItem("user_role", "pastor");
+        navigate("/", { replace: true });
+      }
     } catch {
       toast.error("Erro ao conectar no login");
     } finally {
@@ -155,12 +174,38 @@ export default function Login() {
         <div className="rounded-lg border bg-card p-6 shadow-sm">
           <h2 className="text-base font-semibold">Acesso</h2>
           <form onSubmit={handleLogin} className="mt-4 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={mode === "pastor" ? "default" : "outline"}
+                onClick={() => setMode("pastor")}
+                disabled={loading}
+              >
+                Pastor
+              </Button>
+              <Button
+                type="button"
+                variant={mode === "obreiro" ? "default" : "outline"}
+                onClick={() => setMode("obreiro")}
+                disabled={loading}
+              >
+                Obreiro
+              </Button>
+            </div>
             <Input
               placeholder="TOTVS ID"
               value={totvsId}
               onChange={(e) => setTotvsId(e.target.value)}
               disabled={loading}
             />
+            {mode === "obreiro" && (
+              <Input
+                placeholder="Telefone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                disabled={loading}
+              />
+            )}
             <Input
               type="password"
               placeholder="Senha"
