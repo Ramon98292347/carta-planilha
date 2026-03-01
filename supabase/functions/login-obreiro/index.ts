@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
 
     const statusValue = (obreiro.status || "").trim().toLowerCase();
     if (["bloqueado", "nao", "não"].includes(statusValue)) {
-      return new Response(JSON.stringify({ ok: false, error: "Obreiro bloqueado" }), {
+      return new Response(JSON.stringify({ ok: false, error: "Seu pastor te bloqueou. Procure ele para acessar o seu registro." }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
