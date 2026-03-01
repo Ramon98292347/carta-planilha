@@ -137,24 +137,24 @@ export function formatDate(date: Date | null): string {
 // --- Column alias mapping for CARTAS ---
 
 const CARTAS_ALIASES: Record<string, string[]> = {
-  data_emissao: ["Carimbo de data/hora", "carimbo_de_data/hora", "data_emissao", "data_emissÃ£o", "__col_A"],
+  data_emissao: ["Carimbo de data/hora", "carimbo_de_data/hora", "data_emissao", "data_emissão", "__col_A"],
   regiao: [
-    "Região",
+    "Regi?o",
     "Regiao",
     "regiao",
-    "região",
+    "regi?o",
+    "Qual regi?o Pertence",
     "Qual região Pertence",
-    "Qual regiÃ£o Pertence",
+    "qual_regi?o_pertence",
     "qual_região_pertence",
-    "qual_regiÃ£o_pertence",
     "__col_B",
   ],
   igreja_origem: [
     "Igreja que pertence",
+    "Qual Igreja Voc? Pertence?",
     "Qual Igreja Você Pertence?",
-    "Qual Igreja VocÃª Pertence?",
+    "qual_igreja_voc?_pertence?",
     "qual_igreja_você_pertence?",
-    "qual_igreja_vocÃª_pertence?",
     "igreja_origem",
     "Qual Igreja Estadual?",
     "__col_C",
@@ -163,52 +163,52 @@ const CARTAS_ALIASES: Record<string, string[]> = {
   email: ["email", "E-mail", "e-mail", "Email"],
   telefone: ["Telefone", "telefone", "__col_E"],
   data_pregacao: [
-    "Data da pregação",
+    "Data da prega??o",
+    "Data da prega??o.",
     "Data da pregação.",
-    "Data da pregaÃ§Ã£o.",
+    "data_da_prega??o.",
     "data_da_pregação.",
-    "data_da_pregaÃ§Ã£o.",
-    "Dia da pregação",
-    "dia_da_pregação",
+    "Dia da prega??o",
+    "dia_da_prega??o",
     "data_pregacao",
-    "data_pregação",
+    "data_prega??o",
     "Dia",
-    "Mês",
+    "M?s",
     "Ano",
-    "Dia da pregação",
-    "Mês da pregação",
-    "Ano da pregação",
+    "Dia da prega??o",
+    "M?s da prega??o",
+    "Ano da prega??o",
     "__col_I",
   ],
   data_ordenacao: [
+    "Data da Ordena??o",
     "Data da Ordenação",
-    "Data da OrdenaÃ§Ã£o",
-    "data_da_ordenação",
-    "data_da_ordenação",
+    "data_da_ordena??o",
+    "data_da_ordena??o",
     "data_ordenacao",
-    "Dia da Ordenação",
-    "Mês da ordenação",
-    "Ano da Ordemação",
+    "Dia da Ordena??o",
+    "M?s da ordena??o",
+    "Ano da Ordema??o",
     "__col_F",
   ],
   funcao: [
-    "Função Ministerial",
+    "Fun??o Ministerial",
+    "Fun??o Ministerial ?",
     "Função Ministerial ?",
-    "FunÃ§Ã£o Ministerial ?",
-    "função_ministerial",
+    "fun??o_ministerial",
+    "fun??o_ministerial_?",
     "função_ministerial_?",
-    "funÃ§Ã£o_ministerial_?",
     "funcao",
-    "função",
+    "fun??o",
     "__col_J",
   ],
   ipda_destino: ["IPDA Destino", "ipda_destino", "Igreja Destino", "__col_L"],
   igreja_destino: [
     "Igreja que vai pregar",
+    "Qual Igreja voc? est? indo pregar?",
     "Qual Igreja você está indo pregar?",
-    "Qual Igreja vocÃª estÃ¡ indo pregar?",
-    "qual_igreja_você_está_indo_pregar?",
-    "qual_igreja_vocÃª estÃ¡ indo pregar?",
+    "qual_igreja_voc?_est?_indo_pregar?",
+    "qual_igreja_você está indo pregar?",
     "igreja_destino",
     "__col_G",
   ],
@@ -221,20 +221,21 @@ const CARTAS_ALIASES: Record<string, string[]> = {
     "Document Merge Status - Cartas",
     "Document Merge Status - cartas",
     "document_merge_status_-_cartas",
-    "Document Merge Status - Carta de Pregação",
+    "Document Merge Status - Carta de Prega??o",
   ],
   url_pdf: [
     "Merged Doc URL - catas",
     "Merged Doc URL - Cartas",
     "Merged Doc URL - cartas",
     "merged_doc_url_-_cartas",
+    "Merged Doc URL - carta de pregacao",
     "Link to merged Doc - catas",
     "Link to merged Doc - Cartas",
     "Link to merged Doc - cartas",
     "link_to_merged_doc_-_cartas",
     "url_pdf",
-    "Merged Doc URL - Carta de Pregação",
-    "Link to merged Doc - Carta de Pregação",
+    "Merged Doc URL - Carta de Prega??o",
+    "Link to merged Doc - Carta de Prega??o",
     "__col_AB",
     "__col_AC",
   ],
@@ -243,8 +244,9 @@ const CARTAS_ALIASES: Record<string, string[]> = {
     "Merged Doc ID - Cartas",
     "Merged Doc ID - cartas",
     "merged_doc_id_-_cartas",
+    "Merged Doc ID - carta de pregacao",
     "doc_id",
-    "Merged Doc ID - Carta de Pregação",
+    "Merged Doc ID - Carta de Prega??o",
     "__col_AA",
   ],
   // cargo columns for derivation
@@ -252,20 +254,20 @@ const CARTAS_ALIASES: Record<string, string[]> = {
   _dic: ["Dic", "dic"],
   _ob: ["ob"],
   _mem: ["Mem", "mem"],
-  cargo: ["cargo", "Função Ministerial", "Função Ministerial ?", "FunÃ§Ã£o Ministerial ?", "__col_J"],
+  cargo: ["cargo", "Fun??o Ministerial", "Fun??o Ministerial ?", "Função Ministerial ?", "__col_J"],
 };
 const OBREIROS_ALIASES: Record<string, string[]> = {
   nome: ["nome", "Nome", "Nome completo", "nome_completo"],
-  cargo: ["cargo", "Função Ministerial ?", "FunÃ§Ã£o Ministerial ?", "funcao", "função"],
-  igreja: ["igreja", "igreja_origem", "Qual Igreja Você Pertence?", "Qual Igreja VocÃª Pertence?", "Qual Igreja você está indo pregar?"],
-  campo: ["campo", "regiao", "região", "Qual região Pertence", "Qual regiÃ£o Pertence"],
+  cargo: ["cargo", "Fun??o Ministerial ?", "Função Ministerial ?", "funcao", "fun??o"],
+  igreja: ["igreja", "igreja_origem", "Qual Igreja Voc? Pertence?", "Qual Igreja Você Pertence?", "Qual Igreja voc? est? indo pregar?"],
+  campo: ["campo", "regiao", "regi?o", "Qual regi?o Pertence", "Qual região Pertence"],
   status: ["status", "Status", "__col_Z"],
-  data_ordenacao: ["data_ordenacao", "data_ordenação", "data_ordenaÃ§Ã£o", "Data da Ordenação", "Data da OrdenaÃ§Ã£o", "Data da Ordenação", "Data da pregação.", "data_pregacao"],
+  data_ordenacao: ["data_ordenacao", "data_ordena??o", "data_ordenação", "Data da Ordena??o", "Data da Ordenação", "Data da Ordena??o", "Data da prega??o.", "data_pregacao"],
   data_batismo: ["data_batismo", "Data do Batismo", "Data do batismo"],
   telefone: ["telefone", "Telefone", "Celular", "WhatsApp"],
   email: ["email", "E-mail", "e-mail", "Email"],
-  funcao: ["Função Ministerial ?", "FunÃ§Ã£o Ministerial ?", "funcao", "função"],
-  regiao: ["regiao", "região", "Qual região Pertence", "Qual regiÃ£o Pertence"],
+  funcao: ["Fun??o Ministerial ?", "Função Ministerial ?", "funcao", "fun??o"],
+  regiao: ["regiao", "regi?o", "Qual regi?o Pertence", "Qual região Pertence"],
   foto: ["foto", "Foto", "imagem", "Imagem", "photo", "Photo", "url_foto", "URL Foto", "Link da foto", "Link Foto"],
   _ps: ["Ps", "ps"],
   _dic: ["Dic", "dic"],
@@ -277,8 +279,8 @@ const ACESSO_ALIASES: Record<string, string[]> = {
   email: ["email", "E-mail", "e-mail", "Email"],
   nome: ["nome", "Nome", "Nome completo"],
   telefone: ["telefone", "Telefone", "WhatsApp", "Celular"],
-  status: ["status", "Status", "Statu", "Situação", "Situacao", "Acesso"],
-  motivo: ["motivo", "Motivo", "Motivo do bloqueio", "Justificativa", "Observação", "Observacao"],
+  status: ["status", "Status", "Statu", "Situa??o", "Situacao", "Acesso"],
+  motivo: ["motivo", "Motivo", "Motivo do bloqueio", "Justificativa", "Observa??o", "Observacao"],
 };
 
 function findByAliases(row: Record<string, string>, aliases: string[]): string {
@@ -307,7 +309,7 @@ function findByAliases(row: Record<string, string>, aliases: string[]): string {
 
 function normalizeCargoLabel(value: string): string {
   const raw = (value || "").trim();
-  if (!raw || raw === "-" || raw === "â€”" || raw === "—") return "-";
+  if (!raw || raw === "-" || raw === "—" || raw === "?") return "-";
 
   const normalized = raw
     .toLowerCase()
@@ -315,7 +317,7 @@ function normalizeCargoLabel(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]/g, "");
 
-  if (normalized === "dic" || normalized === "diacono" || normalized === "diaconoa") return "Diácono";
+  if (normalized === "dic" || normalized === "diacono" || normalized === "diaconoa") return "Di?cono";
   if (normalized === "ps" || normalized === "pastor") return "Pastor";
   if (normalized === "ob" || normalized === "obreiro") return "Obreiro";
   if (normalized === "mem" || normalized === "membro") return "Membro";
@@ -339,7 +341,7 @@ export function transformCartaRow(raw: Record<string, string>): Record<string, s
     const ob = findByAliases(raw, CARTAS_ALIASES._ob);
     const mem = findByAliases(raw, CARTAS_ALIASES._mem);
     if (ps) cargo = "Pastor";
-    else if (dic) cargo = "Diácono";
+    else if (dic) cargo = "Di?cono";
     else if (ob) cargo = "Obreiro";
     else if (mem) cargo = "Membro";
   }
@@ -381,7 +383,7 @@ export function transformObreiroRow(raw: Record<string, string>): Record<string,
     const ob = findByAliases(raw, OBREIROS_ALIASES._ob);
     const mem = findByAliases(raw, OBREIROS_ALIASES._mem);
     if (ps) cargo = "Pastor";
-    else if (dic) cargo = "Diácono";
+    else if (dic) cargo = "Di?cono";
     else if (ob) cargo = "Obreiro";
     else if (mem) cargo = "Membro";
   }
@@ -415,7 +417,7 @@ export function transformAcessoRow(raw: Record<string, string>): Record<string, 
 
   return {
     email: email || "-",
-    // Alguns usuários preenchem o campo "email" com nome (ex.: MIGUEL)
+    // Alguns usu?rios preenchem o campo "email" com nome (ex.: MIGUEL)
     nome: nome || email || "-",
     telefone: get("telefone") || "-",
     status: get("status") || "-",
@@ -430,11 +432,11 @@ export async function fetchSheetData(
   const url = buildCsvUrl(spreadsheetId, sheetName);
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Não foi possível acessar a aba "${sheetName}". Verifique se a planilha está publicada na web.`);
+    throw new Error(`N?o foi poss?vel acessar a aba "${sheetName}". Verifique se a planilha est? publicada na web.`);
   }
   const text = await response.text();
   if (text.includes("<!DOCTYPE html>") || text.includes("<html")) {
-    throw new Error(`A aba "${sheetName}" não foi encontrada ou a planilha não está pública. Publique via Arquivo -> Compartilhar -> Publicar na web.`);
+    throw new Error(`A aba "${sheetName}" n?o foi encontrada ou a planilha n?o est? p?blica. Publique via Arquivo -> Compartilhar -> Publicar na web.`);
   }
   return parseCSV(text);
 }
@@ -443,6 +445,12 @@ export async function fetchSheetData(
 export function col(row: Record<string, string>, key: string): string {
   return row[key] || "-";
 }
+
+
+
+
+
+
 
 
 
