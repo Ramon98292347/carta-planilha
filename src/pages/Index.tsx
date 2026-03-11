@@ -62,6 +62,7 @@ const Index = () => {
   const googleFormUrl = (localStorage.getItem("google_form_url") || "").trim();
   const googleBlockFormUrl = (localStorage.getItem("google_block_form_url") || "").trim();
   const needsAdminSetup = localStorage.getItem("needs_admin_setup") === "true";
+  const userRole = (localStorage.getItem("user_role") || "").trim();
 
   const fazerCartaUrl = googleFormUrl || googleSheetUrl;
   const connectedHeader = Boolean(churchName && pastorName && googleBlockFormUrl && fazerCartaUrl);
@@ -208,6 +209,11 @@ const Index = () => {
                 >
                   <RefreshCw className="h-4 w-4" /> Atualizar
                 </Button>
+                {userRole !== "obreiro" && (
+                  <Button type="button" variant="outline" onClick={() => navigate("/divulgacao")}>
+                    Divulgação
+                  </Button>
+                )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button type="button" variant="outline" className="relative h-9 w-9 p-0">

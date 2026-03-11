@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import Obreiro from "./pages/Obreiro";
+import Divulgacao from "./pages/Divulgacao";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +43,14 @@ const App = () => (
             element={
               <RequireSession>
                 <Index />
+              </RequireSession>
+            }
+          />
+          <Route
+            path="/divulgacao"
+            element={
+              <RequireSession>
+                <Divulgacao />
               </RequireSession>
             }
           />

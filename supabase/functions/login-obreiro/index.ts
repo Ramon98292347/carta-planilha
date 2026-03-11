@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     const findObreiro = async () => {
       const { data, error } = await supabase
         .from("obreiros_auth")
-        .select("id, nome, telefone, senha_hash, status")
+        .select("id, nome, telefone, senha_hash, status, email, data_nascimento, cep, endereco, numero, complemento, bairro, cidade, uf")
         .eq("client_id", client.id)
         .eq("telefone", phone)
         .limit(1);
@@ -160,6 +160,15 @@ Deno.serve(async (req) => {
         obreiro_name: obreiro.nome || null,
         obreiro_phone: obreiro.telefone || null,
         obreiro_status: obreiro.status || null,
+        obreiro_email: obreiro.email || null,
+        obreiro_data_nascimento: obreiro.data_nascimento || null,
+        obreiro_cep: obreiro.cep || null,
+        obreiro_endereco: obreiro.endereco || null,
+        obreiro_numero: obreiro.numero || null,
+        obreiro_complemento: obreiro.complemento || null,
+        obreiro_bairro: obreiro.bairro || null,
+        obreiro_cidade: obreiro.cidade || null,
+        obreiro_uf: obreiro.uf || null,
         needs_admin_setup: needsAdminSetup,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

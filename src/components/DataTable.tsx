@@ -2,8 +2,9 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, ExternalLink, Eye, Share2, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, EllipsisVertical, ExternalLink, Eye, Share2, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { formatDate, parseDate } from "@/lib/sheets";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
@@ -114,9 +115,26 @@ export function DataTable({
     }
     const docId = (row.doc_id || "").trim();
     if (googleFormUrl && docId) {
+      const rawNome = (row.nome || "").trim();
+      const rawTelefone = (row.telefone || row.phone || "").trim();
+      const rawIgrejaOrigem = (row.igreja_origem || row.igreja || "").trim();
+      const rawDataOrdenacao = (row.data_ordenacao || "").trim();
+      const rawIgrejaDestino = (row.igreja_destino || "").trim();
+      const rawDataPregacao = (row.data_pregacao || "").trim();
+      const rawCargo = (row.cargo || "").trim();
+      const dataOrdenacao = rawDataOrdenacao ? formatDate(parseDate(rawDataOrdenacao)) || rawDataOrdenacao : "";
+      const dataPregacao = rawDataPregacao ? formatDate(parseDate(rawDataPregacao)) || rawDataPregacao : "";
+
       const url = buildFormUrl(googleFormUrl, {
         [BLOCK_FORM_NAME_FIELD]: docId,
         [BLOCK_FORM_STATUS_FIELD]: "FINAL",
+        "entry.421370551": rawNome,
+        "entry.1173234939": rawTelefone,
+        "entry.2131544287": rawIgrejaOrigem,
+        "entry.2054956436": dataOrdenacao,
+        "entry.1451322127": rawIgrejaDestino,
+        "entry.539500659": dataPregacao,
+        "entry.455088591": rawCargo,
       });
       window.open(url, "_blank", "noopener,noreferrer");
       return;
@@ -269,6 +287,18 @@ export function DataTable({
     return raw.trim().toUpperCase();
   };
 
+  const getPdfUrl = (row: Record<string, string>) =>
+    (
+      row.url_pdf ||
+      row["Merged Doc URL - Cartas"] ||
+      row["Merged Doc URL - cartas"] ||
+      row["merged_doc_url_-_cartas"] ||
+      row["Link to merged Doc - Cartas"] ||
+      row["Link to merged Doc - cartas"] ||
+      row["link_to_merged_doc_-_cartas"] ||
+      ""
+    ).trim();
+
   const deleteKey = (row: Record<string, string>) =>
     [row.doc_id, row.url_pdf, row.data_emissao, row.nome].map((v) => (v || "").trim()).join("|").toLowerCase();
 
@@ -350,108 +380,59 @@ export function DataTable({
                   </div>
                 )}
                 {showDetails && actionsVariant === "full" && (
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(row) : row)}
-                      disabled={shouldHighlightBlocked(row)}
-                      className="w-full text-xs order-1"
-                    >
-                      <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openBlockForm(row)}
-                      className={`w-full text-xs order-2 ${
-                        isBlocked(row)
-                          ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
-                          : "border-rose-600 bg-rose-600 text-white hover:bg-rose-700"
-                      }`}
-                    >
-                      {isBlocked(row) ? "Autorizar" : "Bloquear"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openCartaForm(row)}
-                      disabled={shouldHighlightBlocked(row)}
-                      className="w-full text-xs order-3 border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700"
-                    >
-                      Carta
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => shareOnWhatsApp(row)}
-                      disabled={shouldHighlightBlocked(row)}
-                      className="w-full text-xs order-4 border-orange-600 bg-orange-600 text-white hover:bg-orange-700"
-                    >
-                      <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const rawUrl =
-                          row.url_pdf ||
-                          row["Merged Doc URL - Cartas"] ||
-                          row["Merged Doc URL - cartas"] ||
-                          row["merged_doc_url_-_cartas"] ||
-                          row["Link to merged Doc - Cartas"] ||
-                          row["Link to merged Doc - cartas"] ||
-                          row["link_to_merged_doc_-_cartas"];
-                        const url = (rawUrl || "").trim();
-                        if (!url || isEmptyValue(url)) return;
-                        window.open(url, "_blank", "noopener,noreferrer");
-                      }}
-                      disabled={
-                        isBlocked(row) ||
-                        isEmptyValue(
-                          (row.url_pdf ||
-                            row["Merged Doc URL - Cartas"] ||
-                            row["Merged Doc URL - cartas"] ||
-                            row["merged_doc_url_-_cartas"] ||
-                            row["Link to merged Doc - Cartas"] ||
-                            row["Link to merged Doc - cartas"] ||
-                            row["link_to_merged_doc_-_cartas"]) as string
-                        )
-                      }
-                      className="w-full text-xs order-5 border-green-600 bg-green-600 text-white hover:bg-green-700"
-                    >
-                      <ExternalLink className="mr-1 h-3.5 w-3.5" /> PDF
-                    </Button>
-                    {enableDelete && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deleteCarta(row)}
-                        disabled={deletingKey === deleteKey(row)}
-                        className="w-full text-xs order-6 border-rose-600 bg-rose-600 text-white hover:bg-rose-700"
-                      >
-                        <Trash2 className="mr-1 h-3.5 w-3.5" /> {deletingKey === deleteKey(row) ? "Excluindo..." : "Excluir"}
-                      </Button>
-                    )}
+                  <div className="mt-3">
                     {(() => {
+                      const blocked = shouldHighlightBlocked(row);
                       const sendStatus = getSendStatus(row);
                       const sendDisabled = sendStatus === "ENVIADO";
-                      const label =
-                        sendStatus === "ENVIADO"
-                          ? "Enviada"
-                          : sendStatus === "ERRO"
-                            ? "Erro no envio"
-                            : "Enviar pasta";
+                      const sendLabel =
+                        sendStatus === "ENVIADO" ? "Enviada" : sendStatus === "ERRO" ? "Erro no envio" : "Enviar pasta";
+                      const pdfUrl = getPdfUrl(row);
+                      const deleting = deletingKey === deleteKey(row);
+
                       return (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openFolderForm(row)}
-                          disabled={sendDisabled || shouldHighlightBlocked(row)}
-                          className="col-span-3 w-full text-xs order-7 border-teal-600 bg-teal-600 text-white hover:bg-teal-700"
-                        >
-                          {label}
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="w-full text-xs">
+                              <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Ações
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem onSelect={() => setDetailRow(detailRowResolver ? detailRowResolver(row) : row)} disabled={blocked}>
+                              <Eye className="mr-2 h-3.5 w-3.5" /> Detalhes
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => openBlockForm(row)}>
+                              {isBlocked(row) ? "Autorizar" : "Bloquear"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => openCartaForm(row)} disabled={blocked}>
+                              Carta
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => shareOnWhatsApp(row)} disabled={blocked}>
+                              <Share2 className="mr-2 h-3.5 w-3.5" /> Compartilhar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => window.open(pdfUrl, "_blank", "noopener,noreferrer")}
+                              disabled={isBlocked(row) || isEmptyValue(pdfUrl)}
+                            >
+                              <ExternalLink className="mr-2 h-3.5 w-3.5" /> PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => openFolderForm(row)} disabled={sendDisabled || blocked}>
+                              {sendLabel}
+                            </DropdownMenuItem>
+                            {enableDelete && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onSelect={() => deleteCarta(row)}
+                                  disabled={deleting}
+                                  className="text-rose-700 focus:text-rose-800"
+                                >
+                                  <Trash2 className="mr-2 h-3.5 w-3.5" /> {deleting ? "Excluindo..." : "Excluir"}
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       );
                     })()}
                   </div>
@@ -509,75 +490,60 @@ export function DataTable({
                             <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
                           </Button>
                         ) : (
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(row) : row)}
-                              disabled={shouldHighlightBlocked(row)}
-                              className="text-xs bg-sky-600 text-white hover:bg-sky-700"
-                            >
-                              <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openBlockForm(row)}
-                              className={`text-xs ${isBlocked(row) ? "bg-green-600 text-white hover:bg-green-700" : "bg-rose-600 text-white hover:bg-rose-700"}`}
-                            >
-                              {isBlocked(row) ? "Autorizar" : "Bloquear"}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => shareOnWhatsApp(row)}
-                              disabled={shouldHighlightBlocked(row)}
-                              className="text-xs bg-orange-600 text-white hover:bg-orange-700"
-                            >
-                              <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openCartaForm(row)}
-                              disabled={shouldHighlightBlocked(row)}
-                              className="text-xs bg-indigo-600 text-white hover:bg-indigo-700"
-                            >
-                              Carta
-                            </Button>
-                            {(() => {
-                              const sendStatus = getSendStatus(row);
-                              const sendDisabled = sendStatus === "ENVIADO";
-                              const label =
-                                sendStatus === "ENVIADO"
-                                  ? "Enviada"
-                                  : sendStatus === "ERRO"
-                                    ? "Erro no envio"
-                                    : "Enviar carta pasta";
-                              return (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => openFolderForm(row)}
-                                  disabled={sendDisabled || shouldHighlightBlocked(row)}
-                                  className="text-xs bg-teal-600 text-white hover:bg-teal-700"
-                                >
-                                  {label}
-                                </Button>
-                              );
-                            })()}
-                            {enableDelete && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => deleteCarta(row)}
-                                disabled={deletingKey === deleteKey(row)}
-                                className="text-xs bg-rose-600 text-white hover:bg-rose-700"
-                              >
-                                <Trash2 className="mr-1 h-3.5 w-3.5" /> {deletingKey === deleteKey(row) ? "Excluindo..." : "Excluir"}
-                              </Button>
-                            )}
-                          </div>
+                          (() => {
+                            const blocked = shouldHighlightBlocked(row);
+                            const sendStatus = getSendStatus(row);
+                            const sendDisabled = sendStatus === "ENVIADO";
+                            const sendLabel =
+                              sendStatus === "ENVIADO" ? "Enviada" : sendStatus === "ERRO" ? "Erro no envio" : "Enviar carta pasta";
+                            const pdfUrl = getPdfUrl(row);
+                            const deleting = deletingKey === deleteKey(row);
+
+                            return (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="text-xs bg-slate-700 text-white hover:bg-slate-800">
+                                    <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Ações
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                  <DropdownMenuItem onSelect={() => setDetailRow(detailRowResolver ? detailRowResolver(row) : row)} disabled={blocked}>
+                                    <Eye className="mr-2 h-3.5 w-3.5" /> Detalhes
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onSelect={() => openBlockForm(row)}>
+                                    {isBlocked(row) ? "Autorizar" : "Bloquear"}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onSelect={() => shareOnWhatsApp(row)} disabled={blocked}>
+                                    <Share2 className="mr-2 h-3.5 w-3.5" /> Compartilhar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onSelect={() => openCartaForm(row)} disabled={blocked}>
+                                    Carta
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onSelect={() => window.open(pdfUrl, "_blank", "noopener,noreferrer")}
+                                    disabled={isBlocked(row) || isEmptyValue(pdfUrl)}
+                                  >
+                                    <ExternalLink className="mr-2 h-3.5 w-3.5" /> PDF
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onSelect={() => openFolderForm(row)} disabled={sendDisabled || blocked}>
+                                    {sendLabel}
+                                  </DropdownMenuItem>
+                                  {enableDelete && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        onSelect={() => deleteCarta(row)}
+                                        disabled={deleting}
+                                        className="text-rose-700 focus:text-rose-800"
+                                      >
+                                        <Trash2 className="mr-2 h-3.5 w-3.5" /> {deleting ? "Excluindo..." : "Excluir"}
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            );
+                          })()
                         )}
                       </TableCell>
                     )}
