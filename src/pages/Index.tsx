@@ -331,6 +331,10 @@ const Index = () => {
                   detailFields={CARTAS_DETAIL_FIELDS}
                   enableDelete
                   sendStatusById={sendStatusById}
+                  onRefetchCache={async () => {
+                    if (!googleSheetUrl) return;
+                    await connect(googleSheetUrl, customSheetName || undefined, { silent: true });
+                  }}
                   onDeleteSuccess={(row) => {
                     setDeletedDocIds((prev) => {
                       const next = new Set(prev);

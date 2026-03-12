@@ -1,3 +1,4 @@
+import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
 
@@ -15,17 +16,14 @@ const functions = {
     try {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify(options?.body ?? {}),
       });
 
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        return { data: payload, error: new Error("Function invoke failed") };
+        const message = (payload as any)?.error || `Function invoke failed (${response.status})`;
+        return { data: payload, error: new Error(message) };
       }
       return { data: payload, error: null };
     } catch (err: any) {
@@ -35,4 +33,3 @@ const functions = {
 };
 
 export const supabase = { functions };
-

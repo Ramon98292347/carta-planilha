@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { FileText, LogOut, Save, Trash2, UploadCloud } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
@@ -72,11 +73,7 @@ export default function Divulgacao() {
   const [uploading, setUploading] = useState(false);
 
   const headers = useMemo(
-    () => ({
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      "Content-Type": "application/json",
-    }),
+    () => getSupabaseHeaders(),
     []
   );
 
@@ -133,8 +130,7 @@ export default function Divulgacao() {
       const response = await fetch(uploadUrl, {
         method: "PUT",
         headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          ...getSupabaseHeaders({ json: false }),
           "Content-Type": file.type || "application/octet-stream",
           "x-upsert": "true",
         },
@@ -153,8 +149,7 @@ export default function Divulgacao() {
       await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`, {
         method: "DELETE",
         headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          ...getSupabaseHeaders({ json: false }),
         },
       });
     } catch {

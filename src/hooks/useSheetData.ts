@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { extractSpreadsheetId, fetchSheetData, transformAcessoRow, transformCartaRow, transformObreiroRow } from "@/lib/sheets";
+import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 import { toast } from "sonner";
 
 const STORAGE_KEY = "sheets_dashboard_url";
@@ -47,10 +48,7 @@ export function useSheetData() {
     const clientId = (localStorage.getItem("clientId") || "").trim();
     if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
 
-    const headers = {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    };
+    const headers = getSupabaseHeaders({ json: false });
 
     try {
       const params = new URLSearchParams({ select: "last_15_cards", limit: "1" });
@@ -69,9 +67,7 @@ export function useSheetData() {
     if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
 
     const headers = {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      ...getSupabaseHeaders(),
       Prefer: "resolution=merge-duplicates",
     };
 
@@ -95,11 +91,7 @@ export function useSheetData() {
     const clientId = (localStorage.getItem("clientId") || "").trim();
     if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
 
-    const headers = {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    };
+    const headers = getSupabaseHeaders();
 
     const payload = {
       client_id: clientId,

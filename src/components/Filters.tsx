@@ -41,6 +41,21 @@ interface Props {
 }
 
 export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey, statusKey }: Props) {
+  const formatCargoLabel = (value: string) => {
+    const raw = (value || "").trim();
+    const normalized = raw
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+
+    if (normalized === "dic" || normalized === "diacono" || normalized === "diaconoa") return "Diacono";
+    if (normalized === "ps" || normalized === "pastor") return "Pastor";
+    if (normalized === "ob" || normalized === "obreiro") return "Obreiro";
+    if (normalized === "mem" || normalized === "membro") return "Membro";
+    return raw.replace(/\?/g, "");
+  };
+
   const uniqueValues = useMemo(() => {
     const igrejas = new Set<string>();
     const campos = new Set<string>();
@@ -213,7 +228,7 @@ export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey
             <SelectTrigger className="h-10 rounded-xl border-border/90 bg-background text-sm"><SelectValue placeholder="Cargo" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Todos</SelectItem>
-              {uniqueValues.cargos.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+              {uniqueValues.cargos.map((v) => <SelectItem key={v} value={v}>{formatCargoLabel(v)}</SelectItem>)}
             </SelectContent>
           </Select>
         )}

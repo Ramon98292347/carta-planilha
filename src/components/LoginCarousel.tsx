@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
@@ -90,10 +91,7 @@ export function LoginCarousel({ totvsId }: { totvsId: string }) {
       setLastTotvs(value);
       try {
         const response = await fetch(`${SUPABASE_URL}/functions/v1/public-announcements?totvs=${encodeURIComponent(value)}`, {
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          },
+          headers: getSupabaseHeaders({ json: false }),
         });
         const payload = (await response.json().catch(() => null)) as
           | null

@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
-import { LoginCarousel } from "@/components/LoginCarousel";
+import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
@@ -47,7 +47,6 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [adminMsg, setAdminMsg] = useState("");
-  const [loginOpen, setLoginOpen] = useState(false);
   const [quickSignupOpen, setQuickSignupOpen] = useState(false);
   const [signupLoading, setSignupLoading] = useState(false);
   const [signupName, setSignupName] = useState("");
@@ -90,13 +89,7 @@ export default function Login() {
     setSignupNeighborhood("");
     setSignupCity("");
     setSignupState("");
-    setLoginOpen(false);
     setQuickSignupOpen(true);
-  };
-
-  const openLogin = (nextMode: "pastor" | "obreiro") => {
-    setMode(nextMode);
-    setLoginOpen(true);
   };
 
   const openSignup = (nextMode: "pastor" | "obreiro") => {
@@ -120,11 +113,7 @@ export default function Login() {
       const endpoint = mode === "obreiro" ? "login-obreiro" : "login";
       const response = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({
           totvs_church_id: totvsId.trim(),
           password: password.trim(),
@@ -174,10 +163,7 @@ export default function Login() {
           });
           params.set(filterKey, `eq.${result.clientId}`);
           const response = await fetch(`${SUPABASE_URL}/rest/v1/clients?${params.toString()}`, {
-            headers: {
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            },
+            headers: getSupabaseHeaders({ json: false }),
           });
           if (!response.ok) return null;
           const payload = (await response.json().catch(() => [])) as Array<{
@@ -365,47 +351,14 @@ export default function Login() {
             TOTVS: {totvsId?.trim() ? totvsId.trim() : "—"}
           </div>
         </div>
-        <div className="container mx-auto flex flex-wrap items-center gap-2 px-4 pb-4">
-          <Button type="button" onClick={() => openLogin("pastor")}>
-            Pastor
-          </Button>
-          <Button type="button" variant="outline" onClick={() => openLogin("obreiro")}>
-            Obreiro
-          </Button>
-          <Button type="button" variant="ghost" onClick={() => openSignup("pastor")}>
-            Cadastro
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            Informe apenas o TOTVS da igreja cadastrada. Se não souber, procure o pastor.
-          </span>
-        </div>
       </header>
 
       <main className="container mx-auto max-w-6xl px-4 py-6 pb-[calc(2.5rem+2px)]">
-        <LoginCarousel totvsId={totvsId} />
-      </main>
-
-      <footer className="fixed inset-x-0 bottom-0 border-t bg-card">
-        <div className="container mx-auto flex flex-wrap items-center justify-center gap-3 px-2.5 py-2.5 text-center text-xs text-muted-foreground">
-          <span>Desenvolvedor: Ramon Rodrigues</span>
-          <a href="https://wa.me/5527998292347" target="_blank" rel="noopener noreferrer" className="underline">
-            WhatsApp: 27 99829-2347
-          </a>
-          <a href="mailto:ramon98292347@gmail.com" className="underline">
-            Email: ramon98292347@gmail.com
-          </a>
-        </div>
-      </footer>
-
-      <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-display">Login {mode === "pastor" ? "Pastor" : "Obreiro"}</DialogTitle>
-          </DialogHeader>
+        <div className="mx-auto w-full max-w-md rounded-lg border bg-card p-4 shadow-sm">
           <p className="text-xs text-muted-foreground">
-            Você tem cadastro? O primeiro acesso é feito apenas uma vez. Se ainda não tem, clique em cadastrar.
+            Informe apenas o TOTVS da igreja cadastrada. Se não souber, procure o pastor.
           </p>
-          <div className="grid grid-cols-2 gap-2 pt-2">
+          <div className="grid grid-cols-2 gap-2 pt-3">
             <Button type="button" variant={mode === "pastor" ? "default" : "outline"} onClick={() => setMode("pastor")}>
               Pastor
             </Button>
@@ -453,13 +406,26 @@ export default function Login() {
             </Button>
           </div>
           {adminMsg && <p className="mt-2 text-xs text-amber-700">{adminMsg}</p>}
-        </DialogContent>
-      </Dialog>
+        </div>
+      </main>
+
+      <footer className="fixed inset-x-0 bottom-0 border-t bg-card">
+        <div className="container mx-auto flex flex-wrap items-center justify-center gap-3 px-2.5 py-2.5 text-center text-xs text-muted-foreground">
+          <span>Desenvolvedor: Ramon Rodrigues</span>
+          <a href="https://wa.me/5527998292347" target="_blank" rel="noopener noreferrer" className="underline">
+            WhatsApp: 27 99829-2347
+          </a>
+          <a href="mailto:ramon98292347@gmail.com" className="underline">
+            Email: ramon98292347@gmail.com
+          </a>
+        </div>
+      </footer>
 
       <Dialog open={quickSignupOpen} onOpenChange={setQuickSignupOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display">Cadastro {mode === "pastor" ? "Pastor" : "Obreiro"}</DialogTitle>
+            <DialogDescription className="sr-only">Formulário de cadastro rápido para primeiro acesso.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleQuickSignup} className="space-y-3">
             <div className="grid grid-cols-2 gap-2">

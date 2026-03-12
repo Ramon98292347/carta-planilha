@@ -1,0 +1,15 @@
+[functions.public-announcements]
+verify_jwt = false
+
+[functions.login-obreiro]
+verify_jwt = false
+
+[functions.signup-obreiro]
+verify_jwt = false
+
+[functions.signup-pastor]
+verify_jwt = false
+
+[functions.login]
+verify_jwt = false
+

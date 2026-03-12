@@ -222,6 +222,19 @@ const CARTAS_ALIASES: Record<string, string[]> = {
     "Document Merge Status - cartas",
     "document_merge_status_-_cartas",
     "Document Merge Status - Carta de Prega??o",
+    "Document Merge Status - carta de pregação",
+    "Document Merge Status - carta de pregacao",
+    "document_merge_status_-_carta_de_pregacao",
+  ],
+  doc_url: [
+    "Merged Doc URL - carta de pregação",
+    "Merged Doc URL - carta de pregacao",
+    "Merged Doc URL - Carta de Prega??o",
+    "Merged Doc URL - Cartas",
+    "Merged Doc URL - cartas",
+    "merged_doc_url_-_carta_de_pregacao",
+    "merged_doc_url_-_cartas",
+    "__col_AB",
   ],
   url_pdf: [
     "Merged Doc URL - catas",
@@ -236,6 +249,9 @@ const CARTAS_ALIASES: Record<string, string[]> = {
     "url_pdf",
     "Merged Doc URL - Carta de Prega??o",
     "Link to merged Doc - Carta de Prega??o",
+    "Link to merged Doc - carta de pregação",
+    "Link to merged Doc - carta de pregacao",
+    "link_to_merged_doc_-_carta_de_pregacao",
     "__col_AB",
     "__col_AC",
   ],
@@ -247,8 +263,19 @@ const CARTAS_ALIASES: Record<string, string[]> = {
     "Merged Doc ID - carta de pregacao",
     "doc_id",
     "Merged Doc ID - Carta de Prega??o",
+    "Merged Doc ID - carta de pregação",
+    "Merged Doc ID - carta de pregacao",
+    "merged_doc_id_-_carta_de_pregacao",
     "__col_AA",
   ],
+  status_carta: ["Status Carta", "status_carta", "__col_AE"],
+  data_liberacao: ["Data Liberação", "Data Liberacao", "data_liberacao", "__col_AF"],
+  liberado_por: ["Liberado Por", "liberado_por", "__col_AG"],
+  envio: ["Envio", "envio", "__col_AH"],
+  data_envio: ["Data Envio", "data_envio", "__col_AI"],
+  drive_status: ["Drive Status", "drive_status", "__col_AJ"],
+  status_usuario: ["Status Usuario", "\"Status Usuario\"", "status_usuario", "__col_AK"],
+  liberacao_automatica: ["Liberação Automática", "Liberacao Automatica", "liberacao_automatica", "__col_AL"],
   // cargo columns for derivation
   _ps: ["Ps", "ps"],
   _dic: ["Dic", "dic"],
@@ -317,7 +344,7 @@ function normalizeCargoLabel(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]/g, "");
 
-  if (normalized === "dic" || normalized === "diacono" || normalized === "diaconoa") return "Di?cono";
+  if (normalized === "dic" || normalized === "diacono" || normalized === "diaconoa") return "Diacono";
   if (normalized === "ps" || normalized === "pastor") return "Pastor";
   if (normalized === "ob" || normalized === "obreiro") return "Obreiro";
   if (normalized === "mem" || normalized === "membro") return "Membro";
@@ -341,7 +368,7 @@ export function transformCartaRow(raw: Record<string, string>): Record<string, s
     const ob = findByAliases(raw, CARTAS_ALIASES._ob);
     const mem = findByAliases(raw, CARTAS_ALIASES._mem);
     if (ps) cargo = "Pastor";
-    else if (dic) cargo = "Di?cono";
+    else if (dic) cargo = "Diacono";
     else if (ob) cargo = "Obreiro";
     else if (mem) cargo = "Membro";
   }
@@ -361,6 +388,15 @@ export function transformCartaRow(raw: Record<string, string>): Record<string, s
     igreja_destino: get("igreja_destino") || "-",
     status: get("status") || "-",
     status_merge: get("status_merge") || "-",
+    status_carta: get("status_carta") || "-",
+    data_liberacao: get("data_liberacao") || "-",
+    liberado_por: get("liberado_por") || "-",
+    envio: get("envio") || "-",
+    data_envio: get("data_envio") || "-",
+    drive_status: get("drive_status") || "-",
+    status_usuario: get("status_usuario") || "-",
+    liberacao_automatica: get("liberacao_automatica") || "-",
+    doc_url: get("doc_url") || "-",
     url_pdf: get("url_pdf") || "-",
     doc_id: get("doc_id") || "-",
   };
@@ -383,7 +419,7 @@ export function transformObreiroRow(raw: Record<string, string>): Record<string,
     const ob = findByAliases(raw, OBREIROS_ALIASES._ob);
     const mem = findByAliases(raw, OBREIROS_ALIASES._mem);
     if (ps) cargo = "Pastor";
-    else if (dic) cargo = "Di?cono";
+    else if (dic) cargo = "Diacono";
     else if (ob) cargo = "Obreiro";
     else if (mem) cargo = "Membro";
   }
@@ -445,6 +481,7 @@ export async function fetchSheetData(
 export function col(row: Record<string, string>, key: string): string {
   return row[key] || "-";
 }
+
 
 
 
