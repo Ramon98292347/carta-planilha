@@ -27,7 +27,9 @@ type ClientLettersConfig = {
 };
 
 const getStatusUsuario = (row: Record<string, string>) =>
-  String(row["Status Usuario"] || row["\"Status Usuario\""] || row.statusUsuario || row.status_usuario || "").trim().toUpperCase();
+  String(row.obreiro_auth_status || row["Status Usuario"] || row["\"Status Usuario\""] || row.statusUsuario || row.status_usuario || row.status || "")
+    .trim()
+    .toUpperCase();
 
 const isBlockedRow = (row: Record<string, string>) => getStatusUsuario(row) === "BLOQUEADO";
 
@@ -106,6 +108,7 @@ export function DataTable({
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [clientConfig, setClientConfig] = useState<ClientLettersConfig | null>(null);
   const [rowOverridesByDocId, setRowOverridesByDocId] = useState<Record<string, Record<string, string>>>({});
+  const [rowOverridesByPhone, setRowOverridesByPhone] = useState<Record<string, Record<string, string>>>({});
   const autoSentDocIdsRef = useRef<Set<string>>(new Set());
 
   const totalPages = Math.ceil(data.length / PAGE_SIZE);
@@ -225,10 +228,16 @@ export function DataTable({
       ""
     ).trim();
 
+  const getPhoneDigits = (row: Record<string, string>) =>
+    String(row.telefone || row.phone || row["Telefone"] || "").replace(/\D/g, "").trim();
+
   const resolveRow = (row: Record<string, string>) => {
     const docId = getDocId(row);
-    if (!docId) return row;
-    return rowOverridesByDocId[docId] ? { ...row, ...rowOverridesByDocId[docId] } : row;
+    const phone = getPhoneDigits(row);
+    const byDoc = docId ? rowOverridesByDocId[docId] : undefined;
+    const byPhone = phone ? rowOverridesByPhone[phone] : undefined;
+    if (!byDoc && !byPhone) return row;
+    return { ...row, ...(byPhone || {}), ...(byDoc || {}) };
   };
 
   const getStatusCarta = (row: Record<string, string>) =>
@@ -344,6 +353,64 @@ export function DataTable({
 
   useEffect(() => {
     let active = true;
+
+    const syncBlockedFromObreirosAuth = async () => {
+      const clientId = (localStorage.getItem("clientId") || "").trim();
+      if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+
+      const phones = Array.from(
+        new Set(
+          data
+            .map((row) => String(row.telefone || row.phone || row["Telefone"] || "").replace(/\D/g, "").trim())
+            .filter((v) => !!v)
+        )
+      );
+
+      if (phones.length === 0) return;
+
+      const headers = getSupabaseHeaders({ json: false });
+      const params = new URLSearchParams({ select: "telefone,status", limit: "5000" });
+      params.set("client_id", `eq.${clientId}`);
+
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${params.toString()}`, { headers });
+      if (!response.ok) return;
+
+      const rows = (await response.json().catch(() => [])) as Array<{ telefone?: string; status?: string }>;
+      if (!active || !Array.isArray(rows)) return;
+
+      const statusByPhone = new Map<string, string>();
+      rows.forEach((item) => {
+        const phone = String(item?.telefone || "").replace(/\D/g, "").trim();
+        if (!phone) return;
+        statusByPhone.set(phone, String(item?.status || "").trim().toUpperCase());
+      });
+
+      setRowOverridesByPhone((prev) => {
+        const next = { ...prev };
+        phones.forEach((phone) => {
+          const dbStatus = statusByPhone.get(phone) || "";
+          const statusUsuario = dbStatus === "BLOQUEADO" ? "BLOQUEADO" : "";
+          next[phone] = {
+            ...(next[phone] || {}),
+            obreiro_auth_status: dbStatus,
+            status: dbStatus || (next[phone]?.status || ""),
+            "Status Usuario": statusUsuario,
+            status_usuario: statusUsuario,
+            statusUsuario: statusUsuario,
+          };
+        });
+        return next;
+      });
+    };
+
+    void syncBlockedFromObreirosAuth();
+
+    return () => {
+      active = false;
+    };
+  }, [data]);
+  useEffect(() => {
+    let active = true;
     fetchClientConfig().then((cfg) => {
       if (active) setClientConfig(cfg);
     });
@@ -427,11 +494,61 @@ export function DataTable({
     }
   };
 
+  const upsertObreiroAutoRelease = async (row: Record<string, string>, enabled: boolean) => {
+    const clientId = (localStorage.getItem("clientId") || "").trim();
+    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      throw new Error("Cliente nao autenticado para atualizar liberacao automatica.");
+    }
+
+    const rawPhone = String(row.telefone || row.phone || row["Telefone"] || "");
+    const telefone = rawPhone.replace(/\D/g, "").trim();
+    if (!telefone) {
+      throw new Error("Telefone do obreiro nao informado.");
+    }
+
+    const nome = String(row.nome || row.full_name || row["Nome completo"] || "-").trim() || "-";
+    const email = String(row.email || row["Endereço de e-mail"] || "").trim();
+
+    const headers = {
+      ...getSupabaseHeaders(),
+      Prefer: "resolution=merge-duplicates",
+    };
+
+    const payload = {
+      client_id: clientId,
+      nome,
+      telefone,
+      email: email || null,
+      liberacao_automatica: enabled,
+    };
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?on_conflict=client_id,telefone`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new Error(body || "Falha ao atualizar liberacao automatica no obreiro_auth.");
+    }
+  };
+
   const applyRowOverride = (docId: string, partial: Record<string, string>) => {
     setRowOverridesByDocId((prev) => ({
       ...prev,
       [docId]: {
         ...(prev[docId] || {}),
+        ...partial,
+      },
+    }));
+  };
+
+  const applyPhoneOverride = (phone: string, partial: Record<string, string>) => {
+    setRowOverridesByPhone((prev) => ({
+      ...prev,
+      [phone]: {
+        ...(prev[phone] || {}),
         ...partial,
       },
     }));
@@ -549,91 +666,84 @@ export function DataTable({
   const toggleBloqueioUsuario = async (row: Record<string, string>) => {
     const currentRow = resolveRow(row);
     const docId = getDocId(currentRow);
-    if (!docId) {
-      toast.error("Documento sem ID.");
-      return;
-    }
+    const phone = getPhoneDigits(currentRow);
 
     const targetStatus = isBlocked(currentRow) ? "LIBERADO" : "BLOQUEADO";
     try {
       await upsertObreiroAuthStatus(currentRow, targetStatus as "BLOQUEADO" | "LIBERADO");
 
-      const result = await callLettersWebhook({
-        action: "set_status_usuario",
-        docId,
-        statusUsuario: targetStatus,
-      });
+      const nextStatus = targetStatus === "BLOQUEADO" ? "BLOQUEADO" : "";
 
-      const nextStatus = String(result?.statusUsuario || result?.status_usuario || targetStatus).trim().toUpperCase();
-      applyRowOverride(docId, {
-        "Status Usuario": nextStatus,
-        statusUsuario: nextStatus,
-        status_usuario: nextStatus,
-      });
-      toast.success((result?.message || "Status do usuario atualizado").trim());
-      await onRefetchCache?.();
+      if (docId) {
+        applyRowOverride(docId, {
+          "Status Usuario": nextStatus,
+          statusUsuario: nextStatus,
+          status_usuario: nextStatus,
+          status: targetStatus === "BLOQUEADO" ? "BLOQUEADO" : "AUTORIZADO",
+          __force_blocked: targetStatus === "BLOQUEADO" ? "1" : "0",
+        });
+      }
+
+      if (phone) {
+        applyPhoneOverride(phone, {
+          "Status Usuario": nextStatus,
+          statusUsuario: nextStatus,
+          status_usuario: nextStatus,
+          status: targetStatus === "BLOQUEADO" ? "BLOQUEADO" : "AUTORIZADO",
+          __force_blocked: targetStatus === "BLOQUEADO" ? "1" : "0",
+        });
+      }
+
+      toast.success(targetStatus === "BLOQUEADO" ? "Usuario bloqueado com sucesso" : "Usuario desbloqueado com sucesso");
     } catch (err: any) {
       toast.error(err?.message || "Nao foi possivel atualizar status do usuario.");
     }
   };
 
-  const toggleLiberacaoAutomatica = (row: Record<string, string>) => {
+  const toggleLiberacaoAutomatica = async (row: Record<string, string>) => {
     const currentRow = resolveRow(row);
     const docId = getDocId(currentRow);
-    if (!docId) {
-      toast.error("Documento sem ID.");
+    const phone = getPhoneDigits(currentRow);
+
+    if (!docId && !phone) {
+      toast.error("Registro sem identificador para atualizar liberacao automatica.");
       return;
     }
 
     const next = !isLiberacaoAutomatica(currentRow);
-    applyRowOverride(docId, {
-      liberacao_automatica: next ? "true" : "false",
-      liberacaoAutomatica: next ? "true" : "false",
-      "Liberacao Automatica": next ? "true" : "false",
-    });
+    try {
+      await upsertObreiroAutoRelease(currentRow, next);
+
+      const nextStatusCarta = next ? "LIBERADA" : "GERADA";
+
+      if (docId) {
+        applyRowOverride(docId, {
+          liberacao_automatica: next ? "true" : "false",
+          liberacaoAutomatica: next ? "true" : "false",
+          "Liberacao Automatica": next ? "true" : "false",
+          status_carta: nextStatusCarta,
+          "Status Carta": nextStatusCarta,
+        });
+      }
+
+      if (phone) {
+        applyPhoneOverride(phone, {
+          liberacao_automatica: next ? "true" : "false",
+          liberacaoAutomatica: next ? "true" : "false",
+          "Liberacao Automatica": next ? "true" : "false",
+          status_carta: nextStatusCarta,
+          "Status Carta": nextStatusCarta,
+        });
+      }
+
+      toast.success(next ? "Liberacao automatica ativada" : "Liberacao automatica desativada");
+    } catch (err: any) {
+      toast.error(err?.message || "Nao foi possivel atualizar liberacao automatica.");
+    }
   };
 
   useEffect(() => {
-    let active = true;
-
-    const runAutomaticFlow = async () => {
-      if (!clientConfig) return;
-
-      for (const rawRow of data) {
-        if (!active) return;
-        const row = resolveRow(rawRow);
-        const docId = getDocId(row);
-        if (!docId) continue;
-        if (autoSentDocIdsRef.current.has(docId)) continue;
-        if (isBlocked(row)) continue;
-        if (!isLiberacaoAutomatica(row)) continue;
-        if (getEnvioStatus(row) === "ENVIADO") continue;
-
-        try {
-          const result = await callLettersWebhook(buildSendLetterPayload(row, "automatico", "LIBERACAO_AUTOMATICA"));
-          const nextStatus = (result?.statusCarta || "LIBERADA").trim();
-          const nextLiberadoPor = (result?.liberadoPor || "LIBERACAO_AUTOMATICA").trim();
-          autoSentDocIdsRef.current.add(docId);
-          applyRowOverride(docId, {
-            status_carta: nextStatus,
-            status: nextStatus,
-            liberado_por: nextLiberadoPor,
-            envio: "ENVIADO",
-          });
-          toast.success((result?.message || "Carta enviada automaticamente").trim());
-          await onRefetchCache?.();
-        } catch (err: any) {
-          autoSentDocIdsRef.current.add(docId);
-          toast.error(err?.message || "Falha no envio automatico.");
-        }
-      }
-    };
-
-    runAutomaticFlow();
-
-    return () => {
-      active = false;
-    };
+    // Fluxo automatico por webhook desativado: liberacao automatica agora atualiza apenas banco/front.
   }, [data, clientConfig]);
 
   const deleteKey = (row: Record<string, string>) =>
@@ -688,7 +798,7 @@ export function DataTable({
                 }`}
               >
                 <div className="space-y-2">
-                  {visibleColumns.map((c) => (
+                  {visibleColumns.map((c, colIdx) => (
                     <div key={c.key} className="grid grid-cols-[110px_1fr] gap-2 text-sm">
                       <span className="font-medium text-muted-foreground">{c.label}</span>
                       <span className="break-words text-foreground">
@@ -782,7 +892,7 @@ export function DataTable({
           <Table>
             <TableHeader>
               <TableRow>
-                {visibleColumns.map((c) => (
+                {visibleColumns.map((c, colIdx) => (
                   <TableHead key={c.key} className="whitespace-nowrap text-xs font-semibold">
                     {c.label}
                   </TableHead>
@@ -809,21 +919,22 @@ export function DataTable({
                         : ""
                     }
                   >
-                    {visibleColumns.map((c) => (
+                    {visibleColumns.map((c, colIdx) => (
                       <TableCell key={c.key} className="text-sm">
-                        {c.render ? c.render(resolveRow(row)) : (isEmptyValue(resolveRow(row)[c.key]) ? EMPTY : resolveRow(row)[c.key])}
-                      </TableCell>
-                    ))}
-                    {showDetails && (
-                      <TableCell>
-                        {actionsVariant === "full" && isBlocked(resolveRow(row)) && (
-                          <div className="mb-2 space-y-1">
+                        {actionsVariant === "full" && colIdx === 0 && isBlocked(resolveRow(row)) && (
+                          <div className="mb-2">
                             <Badge className="border-rose-300 bg-rose-100 text-rose-700 hover:bg-rose-100" variant="outline">
                               Usuario bloqueado
                             </Badge>
                             <div className="text-xs text-rose-700">Este membro esta bloqueado.</div>
                           </div>
                         )}
+                        {c.render ? c.render(resolveRow(row)) : (isEmptyValue(resolveRow(row)[c.key]) ? EMPTY : resolveRow(row)[c.key])}
+                      </TableCell>
+                    ))}
+                    {showDetails && (
+                      <TableCell>
+
                         {actionsVariant === "detailsOnly" ? (
                           <Button
                             variant="ghost"
