@@ -13,3 +13,6 @@ verify_jwt = false
 [functions.login]
 verify_jwt = false
 
+[functions.sync-obreiros-from-cards]
+verify_jwt = false
+

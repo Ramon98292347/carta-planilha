@@ -101,8 +101,8 @@ const Index = () => {
     const normalizePhone = (value: string) => (value || "").replace(/\D/g, "");
     const cards = cartas
       .map((row) => ({
-        full_name: String(row.full_name || row["Nome completo"] || "").trim(),
-        phone: normalizePhone(String(row.phone || row["Telefone"] || "")),
+        full_name: String(row.nome || row.full_name || row["Nome completo"] || "").trim(),
+        phone: normalizePhone(String(row.telefone || row.phone || row["Telefone"] || "")),
         email: String(row.email || row["Endereço de e-mail"] || "").trim(),
       }))
       .filter((row) => String(row.phone || "").trim() !== "");
@@ -112,14 +112,14 @@ const Index = () => {
       return;
     }
 
-    const uniqueByPhone = new Map<string, { full_name: string; phone: string; email: string }>();
-    cards.forEach((card) => {
-      if (!uniqueByPhone.has(card.phone)) uniqueByPhone.set(card.phone, card);
-    });
-    const payload = { client_id: clientId, cards: Array.from(uniqueByPhone.values()) };
+    const payload = { client_id: clientId, cards };
     didSyncObreirosFromCacheRef.current = true;
 
-    void supabase.functions.invoke("sync-obreiros-from-cards", { body: payload });
+    void supabase.functions.invoke("sync-obreiros-from-cards", { body: payload }).then(({ error }) => {
+      if (error) {
+        console.error("sync-obreiros-from-cards falhou ao carregar cache", error);
+      }
+    });
   }, [cartas]);
 
   const handleInstall = async () => {
@@ -138,6 +138,21 @@ const Index = () => {
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
 
+  const getDerivedStatusForFilter = (row: Record<string, string>) => {
+    const statusUsuario = String(row["Status Usuario"] || row.statusUsuario || row.status_usuario || row.obreiro_auth_status || "")
+      .trim()
+      .toUpperCase();
+    const statusCarta = String(row["Status Carta"] || row.statusCarta || row.status_carta || "").trim().toUpperCase();
+    const envio = String(row["Envio"] || row.envio || "").trim().toUpperCase();
+    const driveStatus = String(row["Drive Status"] || row.driveStatus || row.drive_status || "").trim().toUpperCase();
+
+    if (statusUsuario === "BLOQUEADO") return "Bloqueado";
+    if (driveStatus === "CARTA_ENVIADA") return "Carta enviada";
+    if (envio === "ENVIADO") return "Carta enviada";
+    if (statusCarta === "LIBERADA") return "Carta liberada";
+    return "Aguardando liberacao";
+  };
+
   const cartasWithSearch = useMemo(() => {
     return cartas.map((row) => ({
       row,
@@ -154,7 +169,7 @@ const Index = () => {
         if (f.search && !search.includes(normalizeSearch(f.search))) return false;
         if (f.igreja && row.igreja_origem !== f.igreja) return false;
         if (f.cargo && row.cargo !== f.cargo) return false;
-        if (f.status && row.status !== f.status) return false;
+        if (f.status && getDerivedStatusForFilter(row) !== f.status) return false;
         if (f.dateStart || f.dateEnd) {
           const d = parseDate(row.data_emissao);
           if (!d) return false;

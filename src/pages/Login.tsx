@@ -19,6 +19,8 @@ type LoginResponse = {
   clientId?: string;
   church_name?: string | null;
   pastor_name?: string | null;
+  pastor_phone?: string | null;
+  pastor_email?: string | null;
   obreiro_name?: string | null;
   obreiro_phone?: string | null;
   obreiro_status?: string | null;
@@ -37,6 +39,9 @@ type LoginResponse = {
   google_form_url_folder?: string | null;
   needs_admin_setup?: boolean;
   error?: string;
+  client_id?: string;
+  phone?: string | null;
+  email?: string | null;
 };
 
 export default function Login() {
@@ -133,6 +138,108 @@ export default function Login() {
           toast.error("Falha no login. Verifique os dados.");
         }
         return;
+      }
+
+      // Sync de obreiros a partir do client_cache.last_15_cards (fallback: usuário logado)
+      try {
+        const clientId = (result.clientId || result.client_id || "").trim();
+        const normalizePhoneValue = (value: string) => (value || "").replace(/\D/g, "");
+        const toSyncCards: Array<{ full_name: string; phone: string; email: string; church_name: string }> = [];
+        let fullName =
+          mode === "obreiro"
+            ? (result.obreiro_name || "").trim()
+            : (result.pastor_name || "").trim();
+        let rawPhone =
+          mode === "obreiro"
+            ? (result.obreiro_phone || result.phone || phone || "").trim()
+            : (result.pastor_phone || result.phone || "").trim();
+        let email =
+          mode === "obreiro"
+            ? (result.obreiro_email || result.email || "").trim()
+            : (result.pastor_email || result.email || "").trim();
+
+        // Fallback para login de pastor: tenta buscar telefone/email direto em clients
+        if (mode === "pastor" && clientId && !normalizePhone(rawPhone) && SUPABASE_URL && SUPABASE_ANON_KEY) {
+          const params = new URLSearchParams({
+            select: "pastor_name,pastor_phone,pastor_email",
+            id: `eq.${clientId}`,
+            limit: "1",
+          });
+          const clientRes = await fetch(`${SUPABASE_URL}/rest/v1/clients?${params.toString()}`, {
+            headers: getSupabaseHeaders({ json: false }),
+          });
+          if (clientRes.ok) {
+            const payload = (await clientRes.json().catch(() => [])) as Array<{
+              pastor_name?: string | null;
+              pastor_phone?: string | null;
+              pastor_email?: string | null;
+            }>;
+            const info = payload?.[0];
+            if (info) {
+              rawPhone = (rawPhone || info.pastor_phone || "").trim();
+              if (!email) email = (info.pastor_email || "").trim();
+            }
+          }
+        }
+
+        if (clientId && SUPABASE_URL && SUPABASE_ANON_KEY) {
+          const params = new URLSearchParams({
+            select: "last_15_cards",
+            client_id: `eq.${clientId}`,
+            limit: "1",
+          });
+          const cacheRes = await fetch(`${SUPABASE_URL}/rest/v1/client_cache?${params.toString()}`, {
+            headers: getSupabaseHeaders({ json: false }),
+          });
+          if (cacheRes.ok) {
+            const cachePayload = (await cacheRes.json().catch(() => [])) as Array<{
+              last_15_cards?: Array<Record<string, string>>;
+            }>;
+            const rows = cachePayload?.[0]?.last_15_cards || [];
+            rows.forEach((row) => {
+              const rowPhone = normalizePhoneValue(String(row.telefone || row.phone || row["Telefone"] || ""));
+              if (!rowPhone) return;
+              toSyncCards.push({
+                full_name: String(row.nome || row.full_name || row["Nome completo"] || "").trim(),
+                phone: rowPhone,
+                email: String(row.email || row["Endereço de e-mail"] || row["E-mail"] || "").trim(),
+                church_name: String(row.igreja_origem || row.church_name || row["Qual Igreja Você Pertence?"] || "").trim(),
+              });
+            });
+          }
+        }
+
+        if (!toSyncCards.length) {
+          const phoneDigits = normalizePhone(rawPhone);
+          if (phoneDigits) {
+            toSyncCards.push({
+              full_name: fullName,
+              phone: phoneDigits,
+              email,
+              church_name: (result.church_name || "").trim(),
+            });
+          }
+        }
+
+        if (clientId && toSyncCards.length) {
+          const { error } = await supabase.functions.invoke("sync-obreiros-from-cards", {
+            body: {
+              client_id: clientId,
+              cards: toSyncCards,
+            },
+          });
+          if (error) {
+            console.error("sync-obreiros-from-cards falhou no login", error);
+          }
+        } else {
+          console.warn("sync-obreiros-from-cards ignorado no login por falta de client_id/telefone", {
+            clientId,
+            cardsCount: toSyncCards.length,
+            mode,
+          });
+        }
+      } catch {
+        // não bloqueia o login
       }
 
       localStorage.setItem("session_key", result.session_key || "");

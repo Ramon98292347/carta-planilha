@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, EllipsisVertical, ExternalLink, Eye, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, EllipsisVertical, ExternalLink, Eye, Share2, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { formatDate, parseDate } from "@/lib/sheets";
@@ -45,18 +45,18 @@ const getDerivedStatusLabel = (row: Record<string, string>) => {
     .toLowerCase();
   const isAuto = ["1", "true", "sim", "automatico", "automatica", "on"].includes(liberacaoAutomatica);
 
-  if (statusUsuario === "BLOQUEADO") return "Usuario bloqueado";
+  if (statusUsuario === "BLOQUEADO") return "Bloqueado";
   if (driveStatus === "CARTA_ENVIADA") return "Carta enviada";
-  if (envio === "ENVIADO") return "Enviada";
+  if (envio === "ENVIADO") return "Carta enviada";
   if (statusCarta === "LIBERADA") return "Carta liberada";
   if (isAuto) return "Liberacao automatica";
   return "Aguardando liberacao";
 };
 
 const getDerivedStatusClass = (label: string) => {
-  if (label === "Usuario bloqueado") return "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-50";
+  if (label === "Bloqueado") return "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-50";
   if (label === "Gerada") return "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50";
-  if (label === "Aguardando liberacao") return "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-50";
+  if (label === "Aguardando liberacao") return "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-50";
   if (label === "Liberacao automatica") return "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50";
   return "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50";
 };
@@ -369,20 +369,23 @@ export function DataTable({
       if (phones.length === 0) return;
 
       const headers = getSupabaseHeaders({ json: false });
-      const params = new URLSearchParams({ select: "telefone,status", limit: "5000" });
+      const params = new URLSearchParams({ select: "telefone,status,liberacao_automatica", limit: "5000" });
       params.set("client_id", `eq.${clientId}`);
 
       const response = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${params.toString()}`, { headers });
       if (!response.ok) return;
 
-      const rows = (await response.json().catch(() => [])) as Array<{ telefone?: string; status?: string }>;
+      const rows = (await response.json().catch(() => [])) as Array<{ telefone?: string; status?: string; liberacao_automatica?: boolean | string | null }>;
       if (!active || !Array.isArray(rows)) return;
 
       const statusByPhone = new Map<string, string>();
+      const autoByPhone = new Map<string, boolean>();
       rows.forEach((item) => {
         const phone = String(item?.telefone || "").replace(/\D/g, "").trim();
         if (!phone) return;
         statusByPhone.set(phone, String(item?.status || "").trim().toUpperCase());
+        const rawAuto = String(item?.liberacao_automatica ?? "").trim().toLowerCase();
+        autoByPhone.set(phone, rawAuto === "true" || rawAuto === "1");
       });
 
       setRowOverridesByPhone((prev) => {
@@ -390,6 +393,7 @@ export function DataTable({
         phones.forEach((phone) => {
           const dbStatus = statusByPhone.get(phone) || "";
           const statusUsuario = dbStatus === "BLOQUEADO" ? "BLOQUEADO" : "";
+          const autoEnabled = autoByPhone.get(phone) === true;
           next[phone] = {
             ...(next[phone] || {}),
             obreiro_auth_status: dbStatus,
@@ -397,6 +401,9 @@ export function DataTable({
             "Status Usuario": statusUsuario,
             status_usuario: statusUsuario,
             statusUsuario: statusUsuario,
+            liberacao_automatica: autoEnabled ? "true" : "false",
+            liberacaoAutomatica: autoEnabled ? "true" : "false",
+            "Liberacao Automatica": autoEnabled ? "true" : "false",
           };
         });
         return next;
@@ -589,14 +596,14 @@ export function DataTable({
     }
   };
 
-  const marcarEnvio = async (row: Record<string, string>) => {
+  const marcarEnvio = async (row: Record<string, string>, options?: { skipLiberacaoCheck?: boolean }) => {
     const currentRow = resolveRow(row);
     const docId = getDocId(currentRow);
     if (isBlocked(currentRow)) {
       toast.error("Este membro esta bloqueado.");
       return;
     }
-    if (!isLiberacaoAutomatica(currentRow) && getStatusCarta(currentRow) !== "LIBERADA") {
+    if (!options?.skipLiberacaoCheck && !isLiberacaoAutomatica(currentRow) && getStatusCarta(currentRow) !== "LIBERADA") {
       toast.error("Libere a carta antes de compartilhar.");
       return;
     }
@@ -617,7 +624,7 @@ export function DataTable({
         data_envio: now.toISOString(),
         envio_data: now.toISOString(),
       });
-      toast.success((result?.message || "Envio marcado com sucesso").trim());
+      toast.success((result?.message || "Carta Enviada Com Sucesso").trim());
       await onRefetchCache?.();
     } catch (err: any) {
       toast.error(err?.message || "N?o foi poss?vel marcar envio.");
@@ -660,7 +667,7 @@ export function DataTable({
       return;
     }
     shareOnWhatsApp(currentRow);
-    await marcarEnvio(currentRow);
+    await marcarEnvio(currentRow, { skipLiberacaoCheck: true });
   };
 
   const toggleBloqueioUsuario = async (row: Record<string, string>) => {
@@ -834,7 +841,10 @@ export function DataTable({
                       const blocked = isBlocked(currentRow);
                       const statusCarta = getStatusCarta(currentRow);
                       const liberacaoAutomatica = isLiberacaoAutomatica(currentRow);
+                      const envioStatus = getEnvioStatus(currentRow);
+                      const isEnviado = envioStatus === "ENVIADO";
                       const canLiberar = !blocked && !liberacaoAutomatica && statusCarta !== "LIBERADA";
+                      const canCompartilhar = !blocked;
                       const deleting = deletingKey === deleteKey(row);
 
                       return (
@@ -857,12 +867,16 @@ export function DataTable({
                               </DropdownMenuItem>
                             )}
                             {canLiberar && (
-                              <DropdownMenuItem onSelect={() => liberarCarta(currentRow)}>
+                              <DropdownMenuItem disabled={isEnviado} onSelect={() => liberarCarta(currentRow)}>
                                 Liberar carta
                               </DropdownMenuItem>
                             )}
                             {!blocked && <DropdownMenuItem onSelect={() => openCartaForm(currentRow)}>Carta</DropdownMenuItem>}
-                            {!blocked && !liberacaoAutomatica && <DropdownMenuItem disabled>Aguardando liberacao</DropdownMenuItem>}
+                            {canCompartilhar && (
+                              <DropdownMenuItem disabled={isEnviado} onSelect={() => compartilharCarta(currentRow)}>
+                                <Share2 className="mr-2 h-3.5 w-3.5" /> Compartilhar
+                              </DropdownMenuItem>
+                            )}
                             {!blocked && liberacaoAutomatica && <DropdownMenuItem disabled>Liberacao automatica</DropdownMenuItem>}
                             {blocked && <DropdownMenuItem disabled>Este membro esta bloqueado</DropdownMenuItem>}
                             {enableDelete && (
@@ -950,7 +964,10 @@ export function DataTable({
                             const blocked = isBlocked(currentRow);
                             const statusCarta = getStatusCarta(currentRow);
                             const liberacaoAutomatica = isLiberacaoAutomatica(currentRow);
+                            const envioStatus = getEnvioStatus(currentRow);
+                            const isEnviado = envioStatus === "ENVIADO";
                             const canLiberar = !blocked && !liberacaoAutomatica && statusCarta !== "LIBERADA";
+                            const canCompartilhar = !blocked;
                             const deleting = deletingKey === deleteKey(row);
 
                             return (
@@ -972,9 +989,13 @@ export function DataTable({
                                       Liberacao automatica: {isLiberacaoAutomatica(currentRow) ? "ON" : "OFF"}
                                     </DropdownMenuItem>
                                   )}
-                                  {canLiberar && <DropdownMenuItem onSelect={() => liberarCarta(currentRow)}>Liberar carta</DropdownMenuItem>}
+                                  {canLiberar && <DropdownMenuItem disabled={isEnviado} onSelect={() => liberarCarta(currentRow)}>Liberar carta</DropdownMenuItem>}
                                   {!blocked && <DropdownMenuItem onSelect={() => openCartaForm(currentRow)}>Carta</DropdownMenuItem>}
-                                  {!blocked && !liberacaoAutomatica && <DropdownMenuItem disabled>Aguardando liberacao</DropdownMenuItem>}
+                                  {canCompartilhar && (
+                                    <DropdownMenuItem disabled={isEnviado} onSelect={() => compartilharCarta(currentRow)}>
+                                      <Share2 className="mr-2 h-3.5 w-3.5" /> Compartilhar
+                                    </DropdownMenuItem>
+                                  )}
                                   {!blocked && liberacaoAutomatica && <DropdownMenuItem disabled>Liberacao automatica</DropdownMenuItem>}
                                   {blocked && <DropdownMenuItem disabled>Este membro esta bloqueado</DropdownMenuItem>}
                                   {enableDelete && (
@@ -1106,7 +1127,7 @@ export const CARTAS_COLUMNS: Column[] = [
           <Badge className={getDerivedStatusClass(label)} variant="outline">
             {label}
           </Badge>
-          {label === "Usuario bloqueado" && reason && (
+          {label === "Bloqueado" && reason && (
             <div className="max-w-[280px] whitespace-normal text-xs text-rose-700">
               Motivo: {reason}
             </div>

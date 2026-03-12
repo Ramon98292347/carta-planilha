@@ -62,6 +62,50 @@ export function useSheetData() {
     }
   };
 
+  const fetchObreirosAuth = async (): Promise<Record<string, string>[] | null> => {
+    const clientId = (localStorage.getItem("clientId") || "").trim();
+    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+
+    const headers = getSupabaseHeaders({ json: false });
+    const churchName = (localStorage.getItem("church_name") || "").trim();
+
+    try {
+      const params = new URLSearchParams({
+        select: "id,nome,telefone,email,status,data_nascimento,created_at,updated_at",
+        limit: "5000",
+      });
+      params.set("client_id", `eq.${clientId}`);
+      params.set("order", "updated_at.desc");
+
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${params.toString()}`, { headers });
+      if (!response.ok) return null;
+
+      const payload = (await response.json().catch(() => [])) as Array<{
+        id?: string | null;
+        nome?: string | null;
+        telefone?: string | null;
+        email?: string | null;
+        status?: string | null;
+        data_nascimento?: string | null;
+      }>;
+
+      return payload.map((item) => ({
+        id: String(item.id || "").trim(),
+        nome: String(item.nome || "-").trim() || "-",
+        telefone: String(item.telefone || "-").trim() || "-",
+        email: String(item.email || "-").trim() || "-",
+        status: String(item.status || "AUTORIZADO").trim() || "AUTORIZADO",
+        cargo: "-",
+        igreja: churchName || "-",
+        campo: "-",
+        data_ordenacao: "-",
+        data_batismo: String(item.data_nascimento || "-").trim() || "-",
+      }));
+    } catch {
+      return null;
+    }
+  };
+
   const upsertClientCache = async (cartasRows: Record<string, string>[]) => {
     const clientId = (localStorage.getItem("clientId") || "").trim();
     if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
@@ -245,26 +289,35 @@ export function useSheetData() {
         cartasData = cartasData.slice(-10).reverse();
       }
 
-      // Try OBREIRO/OBREIROS first, then DB fallback
+      // Fonte principal da aba Obreiros: tabela obreiros_auth
       let obreirosData: Record<string, string>[] = [];
       let obOk = false;
-      for (const sheet of ["OBREIRO", "Obreiro", "OBREIROS", "OBREIROS_DB"]) {
-        try {
-          obreirosData = await fetchSheetData(id, sheet);
-          if (obreirosData.length > 0) {
-            obreirosData = obreirosData.map((raw) => {
-              const normalized = transformObreiroRow(raw);
-              const merged: Record<string, string> = { ...raw, ...normalized };
-              Object.keys(merged).forEach((key) => {
-                if (key.startsWith("__col_")) delete merged[key];
+      const obreirosFromAuth = await fetchObreirosAuth();
+      if (obreirosFromAuth) {
+        obreirosData = obreirosFromAuth;
+        obOk = true;
+      }
+
+      // Fallback: aba da planilha somente se a consulta no banco falhar
+      if (!obOk) {
+        for (const sheet of ["OBREIRO", "Obreiro", "OBREIROS", "OBREIROS_DB"]) {
+          try {
+            obreirosData = await fetchSheetData(id, sheet);
+            if (obreirosData.length > 0) {
+              obreirosData = obreirosData.map((raw) => {
+                const normalized = transformObreiroRow(raw);
+                const merged: Record<string, string> = { ...raw, ...normalized };
+                Object.keys(merged).forEach((key) => {
+                  if (key.startsWith("__col_")) delete merged[key];
+                });
+                return merged;
               });
-              return merged;
-            });
-            obOk = true;
-            break;
+              obOk = true;
+              break;
+            }
+          } catch {
+            // try next
           }
-        } catch {
-          // try next
         }
       }
 

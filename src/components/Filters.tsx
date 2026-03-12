@@ -41,6 +41,8 @@ interface Props {
 }
 
 export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey, statusKey }: Props) {
+  const statusOptions = ["Aguardando liberacao", "Carta liberada", "Carta enviada", "Bloqueado"];
+
   const formatCargoLabel = (value: string) => {
     const raw = (value || "").trim();
     const normalized = raw
@@ -233,15 +235,13 @@ export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey
           </Select>
         )}
 
-        {uniqueValues.statuses.length > 0 && (
-          <Select value={filters.status} onValueChange={(v) => set("status", v === "__all__" ? "" : v)}>
-            <SelectTrigger className="h-10 rounded-xl border-border/90 bg-background text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">Todos</SelectItem>
-              {uniqueValues.statuses.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
+        <Select value={filters.status} onValueChange={(v) => set("status", v === "__all__" ? "" : v)}>
+          <SelectTrigger className="h-10 rounded-xl border-border/90 bg-background text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Todos</SelectItem>
+            {statusOptions.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="relative max-w-xl">
