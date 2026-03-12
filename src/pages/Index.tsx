@@ -4,6 +4,7 @@ import { MetricCards } from "@/components/MetricCards";
 import { Filters, FilterValues, emptyFilters } from "@/components/Filters";
 import { DataTable, CARTAS_COLUMNS, OBREIROS_COLUMNS } from "@/components/DataTable";
 import { parseDate } from "@/lib/sheets";
+import { supabase } from "@/lib/supabase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertCircle, Bell, CheckCircle2, Download, FileText, Loader2, LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,7 @@ const Index = () => {
   });
   const [deletedDocIds, setDeletedDocIds] = useState<Set<string>>(new Set());
   const didAutoConnect = useRef(false);
+  const didSyncObreirosFromCacheRef = useRef(false);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   const churchName = (localStorage.getItem("church_name") || "").trim();
@@ -91,6 +93,34 @@ const Index = () => {
     };
     localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(payload));
   }, [cartasFilters]);
+
+  useEffect(() => {
+    const clientId = (localStorage.getItem("clientId") || "").trim();
+    if (!clientId || cartas.length === 0 || didSyncObreirosFromCacheRef.current) return;
+
+    const normalizePhone = (value: string) => (value || "").replace(/\D/g, "");
+    const cards = cartas
+      .map((row) => ({
+        full_name: String(row.full_name || row["Nome completo"] || "").trim(),
+        phone: normalizePhone(String(row.phone || row["Telefone"] || "")),
+        email: String(row.email || row["Endereço de e-mail"] || "").trim(),
+      }))
+      .filter((row) => String(row.phone || "").trim() !== "");
+
+    if (!cards.length) {
+      didSyncObreirosFromCacheRef.current = true;
+      return;
+    }
+
+    const uniqueByPhone = new Map<string, { full_name: string; phone: string; email: string }>();
+    cards.forEach((card) => {
+      if (!uniqueByPhone.has(card.phone)) uniqueByPhone.set(card.phone, card);
+    });
+    const payload = { client_id: clientId, cards: Array.from(uniqueByPhone.values()) };
+    didSyncObreirosFromCacheRef.current = true;
+
+    void supabase.functions.invoke("sync-obreiros-from-cards", { body: payload });
+  }, [cartas]);
 
   const handleInstall = async () => {
     if (!installPrompt) return;
