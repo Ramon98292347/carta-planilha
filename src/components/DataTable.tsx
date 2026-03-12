@@ -386,6 +386,47 @@ export function DataTable({
     return payload;
   };
 
+  const upsertObreiroAuthStatus = async (row: Record<string, string>, targetStatus: "BLOQUEADO" | "LIBERADO") => {
+    const clientId = (localStorage.getItem("clientId") || "").trim();
+    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      throw new Error("Cliente nao autenticado para atualizar obreiro.");
+    }
+
+    const rawPhone = String(row.telefone || row.phone || row["Telefone"] || "");
+    const telefone = rawPhone.replace(/\D/g, "").trim();
+    if (!telefone) {
+      throw new Error("Telefone do obreiro nao informado.");
+    }
+
+    const nome = String(row.nome || row.full_name || row["Nome completo"] || "-").trim() || "-";
+    const email = String(row.email || row["Endereço de e-mail"] || "").trim();
+    const dbStatus = targetStatus === "BLOQUEADO" ? "BLOQUEADO" : "AUTORIZADO";
+
+    const headers = {
+      ...getSupabaseHeaders(),
+      Prefer: "resolution=merge-duplicates",
+    };
+
+    const payload = {
+      client_id: clientId,
+      nome,
+      telefone,
+      email: email || null,
+      status: dbStatus,
+    };
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?on_conflict=client_id,telefone`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new Error(body || "Falha ao atualizar obreiro_auth.");
+    }
+  };
+
   const applyRowOverride = (docId: string, partial: Record<string, string>) => {
     setRowOverridesByDocId((prev) => ({
       ...prev,
@@ -515,6 +556,8 @@ export function DataTable({
 
     const targetStatus = isBlocked(currentRow) ? "LIBERADO" : "BLOQUEADO";
     try {
+      await upsertObreiroAuthStatus(currentRow, targetStatus as "BLOQUEADO" | "LIBERADO");
+
       const result = await callLettersWebhook({
         action: "set_status_usuario",
         docId,
