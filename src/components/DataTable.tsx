@@ -110,6 +110,8 @@ export function DataTable({
   const [rowOverridesByDocId, setRowOverridesByDocId] = useState<Record<string, Record<string, string>>>({});
   const [rowOverridesByPhone, setRowOverridesByPhone] = useState<Record<string, Record<string, string>>>({});
   const autoSentDocIdsRef = useRef<Set<string>>(new Set());
+  const seenDocIdsRef = useRef<Set<string>>(new Set());
+  const autoSendTimersRef = useRef<Record<string, number>>({});
 
   const totalPages = Math.ceil(data.length / PAGE_SIZE);
   const pageData = data.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -369,23 +371,25 @@ export function DataTable({
       if (phones.length === 0) return;
 
       const headers = getSupabaseHeaders({ json: false });
-      const params = new URLSearchParams({ select: "telefone,status,liberacao_automatica", limit: "5000" });
+      const params = new URLSearchParams({ select: "telefone,status,liberacao_automatica,status_carta", limit: "5000" });
       params.set("client_id", `eq.${clientId}`);
 
       const response = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${params.toString()}`, { headers });
       if (!response.ok) return;
 
-      const rows = (await response.json().catch(() => [])) as Array<{ telefone?: string; status?: string; liberacao_automatica?: boolean | string | null }>;
+      const rows = (await response.json().catch(() => [])) as Array<{ telefone?: string; status?: string; liberacao_automatica?: boolean | string | null; status_carta?: string | null }>;
       if (!active || !Array.isArray(rows)) return;
 
       const statusByPhone = new Map<string, string>();
       const autoByPhone = new Map<string, boolean>();
+      const statusCartaByPhone = new Map<string, string>();
       rows.forEach((item) => {
         const phone = String(item?.telefone || "").replace(/\D/g, "").trim();
         if (!phone) return;
         statusByPhone.set(phone, String(item?.status || "").trim().toUpperCase());
         const rawAuto = String(item?.liberacao_automatica ?? "").trim().toLowerCase();
         autoByPhone.set(phone, rawAuto === "true" || rawAuto === "1");
+        statusCartaByPhone.set(phone, String(item?.status_carta || "").trim().toUpperCase());
       });
 
       setRowOverridesByPhone((prev) => {
@@ -394,6 +398,7 @@ export function DataTable({
           const dbStatus = statusByPhone.get(phone) || "";
           const statusUsuario = dbStatus === "BLOQUEADO" ? "BLOQUEADO" : "";
           const autoEnabled = autoByPhone.get(phone) === true;
+          const statusCartaDb = statusCartaByPhone.get(phone) || "";
           next[phone] = {
             ...(next[phone] || {}),
             obreiro_auth_status: dbStatus,
@@ -404,6 +409,8 @@ export function DataTable({
             liberacao_automatica: autoEnabled ? "true" : "false",
             liberacaoAutomatica: autoEnabled ? "true" : "false",
             "Liberacao Automatica": autoEnabled ? "true" : "false",
+            status_carta: statusCartaDb || (next[phone]?.status_carta || ""),
+            "Status Carta": statusCartaDb || (next[phone]?.["Status Carta"] || ""),
           };
         });
         return next;
@@ -750,8 +757,52 @@ export function DataTable({
   };
 
   useEffect(() => {
-    // Fluxo automatico por webhook desativado: liberacao automatica agora atualiza apenas banco/front.
-  }, [data, clientConfig]);
+    const rows = data.map((r) => resolveRow(r));
+
+    rows.forEach((row) => {
+      const docId = getDocId(row);
+      if (!docId) return;
+
+      const isNewRow = !seenDocIdsRef.current.has(docId);
+      if (!isNewRow) return;
+
+      seenDocIdsRef.current.add(docId);
+
+      const blocked = isBlocked(row);
+      const statusCarta = getStatusCarta(row);
+      const envio = getEnvioStatus(row);
+
+      if (blocked) return;
+      if (statusCarta !== "LIBERADA") return;
+      if (envio === "ENVIADO") return;
+      if (autoSentDocIdsRef.current.has(docId)) return;
+      if (autoSendTimersRef.current[docId]) return;
+
+      autoSendTimersRef.current[docId] = window.setTimeout(async () => {
+        try {
+          const result = await callLettersWebhook(buildSendLetterPayload(row, "automatico", "LIBERACAO_AUTOMATICA"));
+          autoSentDocIdsRef.current.add(docId);
+          applyRowOverride(docId, {
+            status_carta: String(result?.statusCarta || "LIBERADA").trim() || "LIBERADA",
+            envio: String(result?.envio || row.envio || "").trim(),
+          });
+          toast.success(String(result?.message || "Carta enviada automaticamente").trim());
+          await onRefetchCache?.();
+        } catch (err: any) {
+          toast.error(err?.message || "Nao foi possivel enviar carta automaticamente.");
+        } finally {
+          delete autoSendTimersRef.current[docId];
+        }
+      }, 30000);
+    });
+  }, [data, rowOverridesByPhone, rowOverridesByDocId, clientConfig]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(autoSendTimersRef.current).forEach((id) => window.clearTimeout(id));
+      autoSendTimersRef.current = {};
+    };
+  }, []);
 
   const deleteKey = (row: Record<string, string>) =>
     [row.doc_id, row.url_pdf, row.data_emissao, row.nome].map((v) => (v || "").trim()).join("|").toLowerCase();
