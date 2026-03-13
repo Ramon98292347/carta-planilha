@@ -499,11 +499,8 @@ export default function Login() {
               Entrar
             </Button>
           </form>
-          <div className="grid grid-cols-2 gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => openSignup("pastor")}>
-              Cadastrar pastor
-            </Button>
-            <Button type="button" variant="outline" onClick={() => openSignup("obreiro")}>
+          <div className="pt-2">
+            <Button type="button" variant="outline" onClick={() => openSignup("obreiro")} className="w-full">
               Cadastrar obreiro
             </Button>
           </div>
