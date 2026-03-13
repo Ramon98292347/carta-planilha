@@ -263,19 +263,17 @@ export default function Login() {
       }
 
       if (SUPABASE_URL && SUPABASE_ANON_KEY && result.clientId) {
-        const fetchClientLinks = async (filterKey: "id" | "client_id") => {
+        const fetchClientLinks = async () => {
           const params = new URLSearchParams({
-            select: "google_block_form_url,google_form_url_folder,google_form_url,google_sheet_url",
+            select: "google_form_url,google_sheet_url",
             limit: "1",
           });
-          params.set(filterKey, `eq.${result.clientId}`);
+          params.set("id", `eq.${result.clientId}`);
           const response = await fetch(`${SUPABASE_URL}/rest/v1/clients?${params.toString()}`, {
             headers: getSupabaseHeaders({ json: false }),
           });
           if (!response.ok) return null;
           const payload = (await response.json().catch(() => [])) as Array<{
-            google_block_form_url?: string | null;
-            google_form_url_folder?: string | null;
             google_form_url?: string | null;
             google_sheet_url?: string | null;
           }>;
@@ -291,11 +289,8 @@ export default function Login() {
         };
 
         try {
-          const byId = await fetchClientLinks("id");
-          const data = byId ?? (await fetchClientLinks("client_id"));
+          const data = await fetchClientLinks();
           if (data) {
-            applyIfChanged("google_block_form_url", data.google_block_form_url);
-            applyIfChanged("google_form_url_folder", data.google_form_url_folder);
             applyIfChanged("google_form_url", data.google_form_url);
             applyIfChanged("google_sheet_url", data.google_sheet_url);
             if (data.google_sheet_url) {
