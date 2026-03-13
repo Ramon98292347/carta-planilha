@@ -143,12 +143,14 @@ const Index = () => {
       .trim()
       .toUpperCase();
     const statusCarta = String(row["Status Carta"] || row.statusCarta || row.status_carta || "").trim().toUpperCase();
+    const statusCartaOperacional = String(row.obreiro_auth_status_carta || "").trim().toUpperCase();
     const envio = String(row["Envio"] || row.envio || "").trim().toUpperCase();
     const driveStatus = String(row["Drive Status"] || row.driveStatus || row.drive_status || "").trim().toUpperCase();
 
     if (statusUsuario === "BLOQUEADO") return "Bloqueado";
     if (driveStatus === "CARTA_ENVIADA") return "Carta enviada";
     if (envio === "ENVIADO") return "Carta enviada";
+    if (statusCartaOperacional === "LIBERADA") return "Liberacao automatica";
     if (statusCarta === "LIBERADA") return "Carta liberada";
     return "Aguardando liberacao";
   };

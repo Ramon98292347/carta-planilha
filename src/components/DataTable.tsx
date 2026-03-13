@@ -27,29 +27,31 @@ type ClientLettersConfig = {
 };
 
 const getStatusUsuario = (row: Record<string, string>) =>
-  String(row.obreiro_auth_status || row["Status Usuario"] || row["\"Status Usuario\""] || row.statusUsuario || row.status_usuario || row.status || "")
+  String(row.obreiro_auth_status || row["Status Usuario"] || row["\"Status Usuario\""] || row.statusUsuario || row.status_usuario || "")
     .trim()
     .toUpperCase();
 
 const isBlockedRow = (row: Record<string, string>) => getStatusUsuario(row) === "BLOQUEADO";
 
+const getStatusCartaOperacional = (row: Record<string, string>) => String(row.obreiro_auth_status_carta || "").trim().toUpperCase();
+
+const getStatusCartaVisual = (row: Record<string, string>) =>
+  String(row["Status Carta"] || row.statusCarta || row.status_carta || "").trim().toUpperCase();
+
+const isAutoReleaseEnabled = (row: Record<string, string>) => getStatusCartaOperacional(row) === "LIBERADA";
+
 const getDerivedStatusLabel = (row: Record<string, string>) => {
   const statusUsuario = getStatusUsuario(row);
-  const statusCarta = String(row["Status Carta"] || row.statusCarta || row.status_carta || "").trim().toUpperCase();
+  const statusCartaVisual = getStatusCartaVisual(row);
+  const statusCartaOperacional = getStatusCartaOperacional(row);
   const envio = String(row["Envio"] || row.envio || "").trim().toUpperCase();
   const driveStatus = String(row["Drive Status"] || row.driveStatus || row.drive_status || "").trim().toUpperCase();
-  const liberacaoAutomatica = String(
-    row.liberacaoAutomatica || row.liberacao_automatica || row["Liberação Automática"] || row["Liberacao Automatica"] || "false"
-  )
-    .trim()
-    .toLowerCase();
-  const isAuto = ["1", "true", "sim", "automatico", "automatica", "on"].includes(liberacaoAutomatica);
 
   if (statusUsuario === "BLOQUEADO") return "Bloqueado";
   if (driveStatus === "CARTA_ENVIADA") return "Carta enviada";
   if (envio === "ENVIADO") return "Carta enviada";
-  if (statusCarta === "LIBERADA") return "Carta liberada";
-  if (isAuto) return "Liberacao automatica";
+  if (statusCartaOperacional === "LIBERADA") return "Liberacao automatica";
+  if (statusCartaVisual === "LIBERADA") return "Carta liberada";
   return "Aguardando liberacao";
 };
 
@@ -57,6 +59,7 @@ const getDerivedStatusClass = (label: string) => {
   if (label === "Bloqueado") return "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-50";
   if (label === "Gerada") return "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50";
   if (label === "Aguardando liberacao") return "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-50";
+  if (label === "Liberacao automatica") return "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50";
   if (label === "Liberacao automatica") return "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50";
   return "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50";
 };
@@ -242,8 +245,7 @@ export function DataTable({
     return { ...row, ...(byPhone || {}), ...(byDoc || {}) };
   };
 
-  const getStatusCarta = (row: Record<string, string>) =>
-    String(row.status_carta || row.statusCarta || row["Status Carta"] || row.status || "").trim().toUpperCase();
+  const getStatusCarta = (row: Record<string, string>) => getStatusCartaVisual(row);
 
   const getEnvioStatus = (row: Record<string, string>) =>
     String(row.envio || row["Envio"] || row.send_status || "").trim().toUpperCase();
@@ -300,12 +302,7 @@ export function DataTable({
     liberadoPor,
   });
 
-  const isLiberacaoAutomatica = (row: Record<string, string>) => {
-    const raw = String(row.liberacaoAutomatica || row.liberacao_automatica || row["Liberação Automática"] || row["Liberacao Automatica"] || "false")
-      .trim()
-      .toLowerCase();
-    return ["1", "true", "sim", "automatico", "automatica", "on"].includes(raw);
-  };
+  const isLiberacaoAutomatica = (row: Record<string, string>) => isAutoReleaseEnabled(row);
 
   const parseClientConfig = (payload: Record<string, any> | null | undefined): ClientLettersConfig | null => {
     if (!payload) return null;
@@ -371,24 +368,21 @@ export function DataTable({
       if (phones.length === 0) return;
 
       const headers = getSupabaseHeaders({ json: false });
-      const params = new URLSearchParams({ select: "telefone,status,liberacao_automatica,status_carta", limit: "5000" });
+      const params = new URLSearchParams({ select: "telefone,status,status_carta", limit: "5000" });
       params.set("client_id", `eq.${clientId}`);
 
       const response = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${params.toString()}`, { headers });
       if (!response.ok) return;
 
-      const rows = (await response.json().catch(() => [])) as Array<{ telefone?: string; status?: string; liberacao_automatica?: boolean | string | null; status_carta?: string | null }>;
+      const rows = (await response.json().catch(() => [])) as Array<{ telefone?: string; status?: string; status_carta?: string | null }>;
       if (!active || !Array.isArray(rows)) return;
 
       const statusByPhone = new Map<string, string>();
-      const autoByPhone = new Map<string, boolean>();
       const statusCartaByPhone = new Map<string, string>();
       rows.forEach((item) => {
         const phone = String(item?.telefone || "").replace(/\D/g, "").trim();
         if (!phone) return;
         statusByPhone.set(phone, String(item?.status || "").trim().toUpperCase());
-        const rawAuto = String(item?.liberacao_automatica ?? "").trim().toLowerCase();
-        autoByPhone.set(phone, rawAuto === "true" || rawAuto === "1");
         statusCartaByPhone.set(phone, String(item?.status_carta || "").trim().toUpperCase());
       });
 
@@ -396,21 +390,16 @@ export function DataTable({
         const next = { ...prev };
         phones.forEach((phone) => {
           const dbStatus = statusByPhone.get(phone) || "";
+          const dbStatusCarta = statusCartaByPhone.get(phone) || "GERADA";
           const statusUsuario = dbStatus === "BLOQUEADO" ? "BLOQUEADO" : "";
-          const autoEnabled = autoByPhone.get(phone) === true;
-          const statusCartaDb = statusCartaByPhone.get(phone) || "";
           next[phone] = {
             ...(next[phone] || {}),
             obreiro_auth_status: dbStatus,
+            obreiro_auth_status_carta: dbStatusCarta,
             status: dbStatus || (next[phone]?.status || ""),
             "Status Usuario": statusUsuario,
             status_usuario: statusUsuario,
             statusUsuario: statusUsuario,
-            liberacao_automatica: autoEnabled ? "true" : "false",
-            liberacaoAutomatica: autoEnabled ? "true" : "false",
-            "Liberacao Automatica": autoEnabled ? "true" : "false",
-            status_carta: statusCartaDb || (next[phone]?.status_carta || ""),
-            "Status Carta": statusCartaDb || (next[phone]?.["Status Carta"] || ""),
           };
         });
         return next;
@@ -467,7 +456,7 @@ export function DataTable({
     return payload;
   };
 
-  const upsertObreiroAuthStatus = async (row: Record<string, string>, targetStatus: "BLOQUEADO" | "LIBERADO") => {
+  const getObreiroAuthIdentity = (row: Record<string, string>) => {
     const clientId = (localStorage.getItem("clientId") || "").trim();
     if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
       throw new Error("Cliente nao autenticado para atualizar obreiro.");
@@ -480,74 +469,84 @@ export function DataTable({
     }
 
     const nome = String(row.nome || row.full_name || row["Nome completo"] || "-").trim() || "-";
-    const email = String(row.email || row["Endereço de e-mail"] || "").trim();
-    const dbStatus = targetStatus === "BLOQUEADO" ? "BLOQUEADO" : "AUTORIZADO";
+    const email = String(row.email || row["Endere?o de e-mail"] || "").trim();
 
+    return { clientId, telefone, nome, email };
+  };
+
+  const saveObreiroAuthRow = async (row: Record<string, string>, patch: Record<string, string | null>) => {
+    const { clientId, telefone, nome, email } = getObreiroAuthIdentity(row);
     const headers = {
       ...getSupabaseHeaders(),
-      Prefer: "resolution=merge-duplicates",
+      Prefer: "return=representation",
     };
 
-    const payload = {
+    const params = new URLSearchParams({
+      select: "id,telefone,status,status_carta",
+      limit: "1",
+    });
+    params.set("client_id", "eq." + clientId);
+    params.set("telefone", "eq." + telefone);
+
+    const existingRes = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${params.toString()}`, {
+      headers: getSupabaseHeaders({ json: false }),
+    });
+
+    if (!existingRes.ok) {
+      const body = await existingRes.text().catch(() => "");
+      throw new Error(body || "Falha ao consultar obreiro_auth.");
+    }
+
+    const existing = await existingRes.json().catch(() => []);
+    const basePayload = {
       client_id: clientId,
       nome,
       telefone,
       email: email || null,
-      status: dbStatus,
+      ...patch,
     };
 
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?on_conflict=client_id,telefone`, {
+    if (Array.isArray(existing) && existing[0]?.id) {
+      const updateParams = new URLSearchParams({ select: "id,telefone,status,status_carta" });
+      updateParams.set("id", "eq." + existing[0].id);
+      const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${updateParams.toString()}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(patch),
+      });
+
+      if (!updateRes.ok) {
+        const body = await updateRes.text().catch(() => "");
+        throw new Error(body || "Falha ao atualizar obreiro_auth.");
+      }
+
+      const updated = await updateRes.json().catch(() => []);
+      return Array.isArray(updated) ? updated[0] || null : null;
+    }
+
+    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth`, {
       method: "POST",
       headers,
-      body: JSON.stringify(payload),
+      body: JSON.stringify(basePayload),
     });
 
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      throw new Error(body || "Falha ao atualizar obreiro_auth.");
+    if (!insertRes.ok) {
+      const body = await insertRes.text().catch(() => "");
+      throw new Error(body || "Falha ao criar obreiro_auth.");
     }
+
+    const inserted = await insertRes.json().catch(() => []);
+    return Array.isArray(inserted) ? inserted[0] || null : null;
+  };
+
+  const upsertObreiroAuthStatus = async (row: Record<string, string>, targetStatus: "BLOQUEADO" | "AUTORIZADO") => {
+    const dbStatus = targetStatus === "BLOQUEADO" ? "BLOQUEADO" : "AUTORIZADO";
+    return saveObreiroAuthRow(row, { status: dbStatus });
   };
 
   const upsertObreiroAutoRelease = async (row: Record<string, string>, enabled: boolean) => {
-    const clientId = (localStorage.getItem("clientId") || "").trim();
-    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      throw new Error("Cliente nao autenticado para atualizar liberacao automatica.");
-    }
-
-    const rawPhone = String(row.telefone || row.phone || row["Telefone"] || "");
-    const telefone = rawPhone.replace(/\D/g, "").trim();
-    if (!telefone) {
-      throw new Error("Telefone do obreiro nao informado.");
-    }
-
-    const nome = String(row.nome || row.full_name || row["Nome completo"] || "-").trim() || "-";
-    const email = String(row.email || row["Endereço de e-mail"] || "").trim();
-
-    const headers = {
-      ...getSupabaseHeaders(),
-      Prefer: "resolution=merge-duplicates",
-    };
-
-    const payload = {
-      client_id: clientId,
-      nome,
-      telefone,
-      email: email || null,
-      liberacao_automatica: enabled,
-    };
-
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?on_conflict=client_id,telefone`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      throw new Error(body || "Falha ao atualizar liberacao automatica no obreiro_auth.");
-    }
+    return saveObreiroAuthRow(row, { status_carta: enabled ? "LIBERADA" : "GERADA" });
   };
-
   const applyRowOverride = (docId: string, partial: Record<string, string>) => {
     setRowOverridesByDocId((prev) => ({
       ...prev,
@@ -749,28 +748,30 @@ export function DataTable({
     const docId = getDocId(currentRow);
     const phone = getPhoneDigits(currentRow);
 
-    const targetStatus = isBlocked(currentRow) ? "LIBERADO" : "BLOQUEADO";
+    const targetStatus = isBlocked(currentRow) ? "AUTORIZADO" : "BLOQUEADO";
     try {
-      await upsertObreiroAuthStatus(currentRow, targetStatus as "BLOQUEADO" | "LIBERADO");
+      const saved = await upsertObreiroAuthStatus(currentRow, targetStatus as "BLOQUEADO" | "AUTORIZADO");
 
-      const nextStatus = targetStatus === "BLOQUEADO" ? "BLOQUEADO" : "";
+      const nextStatus = String(saved?.status || targetStatus).trim().toUpperCase() || targetStatus;
 
       if (docId) {
         applyRowOverride(docId, {
+          obreiro_auth_status: nextStatus,
           "Status Usuario": nextStatus,
           statusUsuario: nextStatus,
           status_usuario: nextStatus,
-          status: targetStatus === "BLOQUEADO" ? "BLOQUEADO" : "AUTORIZADO",
+          status: nextStatus,
           __force_blocked: targetStatus === "BLOQUEADO" ? "1" : "0",
         });
       }
 
       if (phone) {
         applyPhoneOverride(phone, {
+          obreiro_auth_status: nextStatus,
           "Status Usuario": nextStatus,
           statusUsuario: nextStatus,
           status_usuario: nextStatus,
-          status: targetStatus === "BLOQUEADO" ? "BLOQUEADO" : "AUTORIZADO",
+          status: nextStatus,
           __force_blocked: targetStatus === "BLOQUEADO" ? "1" : "0",
         });
       }
@@ -793,27 +794,19 @@ export function DataTable({
 
     const next = !isLiberacaoAutomatica(currentRow);
     try {
-      await upsertObreiroAutoRelease(currentRow, next);
+      const saved = await upsertObreiroAutoRelease(currentRow, next);
 
-      const nextStatusCarta = next ? "LIBERADA" : "GERADA";
+      const nextStatusCarta = String(saved?.status_carta || (next ? "LIBERADA" : "GERADA")).trim().toUpperCase() || (next ? "LIBERADA" : "GERADA");
 
       if (docId) {
         applyRowOverride(docId, {
-          liberacao_automatica: next ? "true" : "false",
-          liberacaoAutomatica: next ? "true" : "false",
-          "Liberacao Automatica": next ? "true" : "false",
-          status_carta: nextStatusCarta,
-          "Status Carta": nextStatusCarta,
+          obreiro_auth_status_carta: nextStatusCarta,
         });
       }
 
       if (phone) {
         applyPhoneOverride(phone, {
-          liberacao_automatica: next ? "true" : "false",
-          liberacaoAutomatica: next ? "true" : "false",
-          "Liberacao Automatica": next ? "true" : "false",
-          status_carta: nextStatusCarta,
-          "Status Carta": nextStatusCarta,
+          obreiro_auth_status_carta: nextStatusCarta,
         });
       }
 
@@ -837,11 +830,12 @@ export function DataTable({
       seenDocIdsRef.current.add(docId);
 
       const blocked = isBlocked(row);
-      const statusCarta = getStatusCarta(row);
+      const statusCartaOperacional = getStatusCartaOperacional(row);
       const envio = getEnvioStatus(row);
 
       if (blocked) return;
-      if (statusCarta !== "LIBERADA") return;
+      if (!isAutoReleaseEnabled(row)) return;
+      if (statusCartaOperacional !== "LIBERADA") return;
       if (envio === "ENVIADO") return;
       if (autoSentDocIdsRef.current.has(docId)) return;
       if (autoSendTimersRef.current[docId]) return;
@@ -963,7 +957,7 @@ export function DataTable({
                       const liberacaoAutomatica = isLiberacaoAutomatica(currentRow);
                       const envioStatus = getEnvioStatus(currentRow);
                       const isEnviado = envioStatus === "ENVIADO";
-                      const canLiberar = !blocked && !liberacaoAutomatica && statusCarta !== "LIBERADA";
+                      const canLiberar = !blocked && statusCarta !== "LIBERADA";
                       const canCompartilhar = !blocked;
                       const deleting = deletingKey === deleteKey(row);
 
@@ -983,7 +977,7 @@ export function DataTable({
                             <DropdownMenuItem onSelect={() => toggleBloqueioUsuario(currentRow)}>{blocked ? "Desbloquear usuario" : "Bloquear usuario"}</DropdownMenuItem>
                             {!blocked && (
                               <DropdownMenuItem onSelect={() => toggleLiberacaoAutomatica(currentRow)}>
-                                Liberacao automatica: {isLiberacaoAutomatica(currentRow) ? "ON" : "OFF"}
+                                Liberacao automatica: {liberacaoAutomatica ? "ON" : "OFF"}
                               </DropdownMenuItem>
                             )}
                             {canLiberar && (
@@ -1086,7 +1080,7 @@ export function DataTable({
                             const liberacaoAutomatica = isLiberacaoAutomatica(currentRow);
                             const envioStatus = getEnvioStatus(currentRow);
                             const isEnviado = envioStatus === "ENVIADO";
-                            const canLiberar = !blocked && !liberacaoAutomatica && statusCarta !== "LIBERADA";
+                            const canLiberar = !blocked && statusCarta !== "LIBERADA";
                             const canCompartilhar = !blocked;
                             const deleting = deletingKey === deleteKey(row);
 
@@ -1106,7 +1100,7 @@ export function DataTable({
                                   <DropdownMenuItem onSelect={() => toggleBloqueioUsuario(currentRow)}>{blocked ? "Desbloquear usuario" : "Bloquear usuario"}</DropdownMenuItem>
                                   {!blocked && (
                                     <DropdownMenuItem onSelect={() => toggleLiberacaoAutomatica(currentRow)}>
-                                      Liberacao automatica: {isLiberacaoAutomatica(currentRow) ? "ON" : "OFF"}
+                                      Liberacao automatica: {liberacaoAutomatica ? "ON" : "OFF"}
                                     </DropdownMenuItem>
                                   )}
                                   {canLiberar && <DropdownMenuItem disabled={isEnviado} onSelect={() => liberarCarta(currentRow)}>Liberar carta</DropdownMenuItem>}
