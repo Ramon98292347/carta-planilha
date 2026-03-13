@@ -26,6 +26,7 @@ type LoginResponse = {
   obreiro_status?: string | null;
   obreiro_email?: string | null;
   obreiro_data_nascimento?: string | null;
+  obreiro_data_ordenacao?: string | null;
   obreiro_cep?: string | null;
   obreiro_endereco?: string | null;
   obreiro_numero?: string | null;
@@ -60,6 +61,7 @@ export default function Login() {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPhone, setSignupPhone] = useState("");
   const [signupBirthDate, setSignupBirthDate] = useState("");
+  const [signupOrdinationDate, setSignupOrdinationDate] = useState("");
   const [signupCep, setSignupCep] = useState("");
   const [signupAddress, setSignupAddress] = useState("");
   const [signupNumber, setSignupNumber] = useState("");
@@ -88,6 +90,7 @@ export default function Login() {
     setSignupEmail("");
     setSignupPhone(mode === "obreiro" ? phone : "");
     setSignupBirthDate("");
+    setSignupOrdinationDate("");
     setSignupCep("");
     setSignupAddress("");
     setSignupNumber("");
@@ -310,6 +313,7 @@ export default function Login() {
         localStorage.setItem("obreiro_status", result.obreiro_status || "");
         localStorage.setItem("obreiro_email", result.obreiro_email || "");
         localStorage.setItem("obreiro_data_nascimento", result.obreiro_data_nascimento || "");
+        localStorage.setItem("obreiro_data_ordenacao", result.obreiro_data_ordenacao || "");
         localStorage.setItem("obreiro_cep", result.obreiro_cep || "");
         localStorage.setItem("obreiro_endereco", result.obreiro_endereco || "");
         localStorage.setItem("obreiro_numero", result.obreiro_numero || "");
@@ -372,6 +376,7 @@ export default function Login() {
               password: password.trim(),
               email: signupEmail.trim(),
               data_nascimento: signupBirthDate.trim(),
+              data_ordenacao: signupOrdinationDate.trim(),
               cep: normalizeCep(signupCep),
               endereco: signupAddress.trim(),
               numero: signupNumber.trim(),
@@ -580,6 +585,15 @@ export default function Login() {
                     type="date"
                     value={signupBirthDate}
                     onChange={(e) => setSignupBirthDate(e.target.value)}
+                    disabled={signupLoading}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Data da ordenação</span>
+                  <Input
+                    type="date"
+                    value={signupOrdinationDate}
+                    onChange={(e) => setSignupOrdinationDate(e.target.value)}
                     disabled={signupLoading}
                   />
                 </div>

@@ -10,75 +10,58 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
 const normalizePhone = (value: string) => (value || "").replace(/\D/g, "");
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return new Response(JSON.stringify({ ok: false, error: "Configuração do Supabase ausente." }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ ok: false, error: "Configuracao do Supabase ausente." }, 500);
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
     const body = await req.json().catch(() => ({}));
-    const totvs = (body.totvs_church_id || "").trim();
-    const nome = (body.nome || "").trim();
-    const phone = normalizePhone((body.telefone || "").trim());
-    const password = (body.password || "").trim();
-    const status = (body.status || "AUTORIZADO").trim() || "AUTORIZADO";
-    const email = (body.email || "").trim();
-    const dataNascimento = (body.data_nascimento || "").trim();
-    const cep = (body.cep || "").trim();
-    const endereco = (body.endereco || "").trim();
-    const numero = (body.numero || "").trim();
-    const complemento = (body.complemento || "").trim();
-    const bairro = (body.bairro || "").trim();
-    const cidade = (body.cidade || "").trim();
-    const uf = (body.uf || "").trim();
+    const totvs = String(body.totvs_church_id || "").trim();
+    const nome = String(body.nome || "").trim();
+    const phone = normalizePhone(String(body.telefone || body.phone || "").trim());
+    const password = String(body.password || "").trim();
+    const status = String(body.status || "AUTORIZADO").trim() || "AUTORIZADO";
+    const email = String(body.email || "").trim();
+    const dataNascimento = String(body.data_nascimento || "").trim();
+    const dataOrdenacao = String(body.data_ordenacao || "").trim();
+    const cep = String(body.cep || "").trim();
+    const endereco = String(body.endereco || "").trim();
+    const numero = String(body.numero || "").trim();
+    const complemento = String(body.complemento || "").trim();
+    const bairro = String(body.bairro || "").trim();
+    const cidade = String(body.cidade || "").trim();
+    const uf = String(body.uf || "").trim();
 
     if (!totvs || !nome || !phone || !password) {
-      return new Response(JSON.stringify({ ok: false, error: "Preencha TOTVS, nome, telefone e senha." }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ ok: false, error: "Preencha TOTVS, nome, telefone e senha." }, 400);
     }
 
-    const { data: clients, error: clientErr } = await supabase
+    const { data: client, error: clientErr } = await supabase
       .from("clients")
       .select("id")
       .eq("totvs_church_id", totvs)
-      .limit(1);
+      .maybeSingle();
 
-    if (clientErr || !clients || clients.length === 0) {
-      return new Response(JSON.stringify({ ok: false, error: "TOTVS não encontrado. Procure o pastor." }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const client = clients[0];
-
-    const { data: existing } = await supabase
-      .from("obreiros_auth")
-      .select("id")
-      .eq("client_id", client.id)
-      .eq("telefone", phone)
-      .limit(1);
-
-    if (existing && existing.length > 0) {
-      return new Response(JSON.stringify({ ok: false, error: "Obreiro já cadastrado. Faça login." }), {
-        status: 409,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (clientErr || !client?.id) {
+      return json({ ok: false, error: "TOTVS nao encontrado. Procure o pastor." }, 404);
     }
 
     const senhaHash = await bcrypt.hash(password, 10);
-    const { error: insertErr } = await supabase.from("obreiros_auth").insert({
+
+    const payload = {
       client_id: client.id,
       nome,
       telefone: phone,
@@ -86,6 +69,7 @@ Deno.serve(async (req) => {
       status,
       email: email || null,
       data_nascimento: dataNascimento || null,
+      data_ordenacao: dataOrdenacao || null,
       cep: cep || null,
       endereco: endereco || null,
       numero: numero || null,
@@ -93,22 +77,44 @@ Deno.serve(async (req) => {
       bairro: bairro || null,
       cidade: cidade || null,
       uf: uf || null,
-    });
+    };
 
-    if (insertErr) {
-      return new Response(JSON.stringify({ ok: false, error: "Não foi possível cadastrar o obreiro." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const { data: existing, error: existingErr } = await supabase
+      .from("obreiros_auth")
+      .select("id")
+      .eq("client_id", client.id)
+      .eq("telefone", phone)
+      .maybeSingle();
+
+    if (existingErr) {
+      return json({ ok: false, error: "Nao foi possivel consultar o obreiro." }, 500);
     }
 
-    return new Response(JSON.stringify({ ok: true }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    if (existing?.id) {
+      const { error: updateErr } = await supabase
+        .from("obreiros_auth")
+        .update(payload)
+        .eq("id", existing.id);
+
+      if (updateErr) {
+        return json({ ok: false, error: "Nao foi possivel atualizar o cadastro do obreiro." }, 500);
+      }
+
+      return json({ ok: true, mode: "updated", obreiro_id: existing.id });
+    }
+
+    const { data: created, error: insertErr } = await supabase
+      .from("obreiros_auth")
+      .insert(payload)
+      .select("id")
+      .single();
+
+    if (insertErr || !created?.id) {
+      return json({ ok: false, error: "Nao foi possivel cadastrar o obreiro." }, 500);
+    }
+
+    return json({ ok: true, mode: "created", obreiro_id: created.id });
   } catch {
-    return new Response(JSON.stringify({ ok: false, error: "Falha inesperada no cadastro." }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ ok: false, error: "Falha inesperada no cadastro." }, 500);
   }
 });
