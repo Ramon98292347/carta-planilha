@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarDays, FileText, Loader2, LogOut, RefreshCw, Save, TrendingUp, UserCircle2 } from "lucide-react";
+import { Building2, CalendarDays, FileText, Loader2, LogOut, Phone, RefreshCw, Save, Search, TrendingUp, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 import { toast } from "sonner";
 
@@ -46,6 +45,7 @@ type CartaRow = Record<string, string>;
 type LetterFormState = {
   ministerial: string;
   igreja_destino: string;
+  igreja_destino_manual: string;
   dia_pregacao: string;
 };
 
@@ -71,6 +71,7 @@ const emptyProfile: ObreiroProfile = {
 const emptyLetterForm: LetterFormState = {
   ministerial: "",
   igreja_destino: "",
+  igreja_destino_manual: "",
   dia_pregacao: "",
 };
 
@@ -138,14 +139,20 @@ export default function Obreiro() {
     uf: (localStorage.getItem("obreiro_uf") || "").trim(),
   }));
   const [cards, setCards] = useState<CartaRow[]>([]);
+  const [destinationOptions, setDestinationOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [creatingLetter, setCreatingLetter] = useState(false);
   const [letterForm, setLetterForm] = useState<LetterFormState>(emptyLetterForm);
-  const [letterPayloadPreview, setLetterPayloadPreview] = useState<Record<string, string> | null>(null);
 
   const blocked = useMemo(() => isBlockedStatusValue(profile.status), [profile.status]);
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const maxPregacaoIso = useMemo(() => {
+    const limit = new Date();
+    limit.setDate(limit.getDate() + 30);
+    return limit.toISOString().slice(0, 10);
+  }, []);
 
   const loadProfile = async () => {
     if (!clientId || !phone || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
@@ -202,6 +209,37 @@ export default function Obreiro() {
     localStorage.setItem("obreiro_uf", nextProfile.uf || "");
   };
 
+  const loadDestinationOptions = async () => {
+    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+
+    const params = new URLSearchParams({
+      select: "totvs_church_id,church_name,parent_totvs_church_id,is_active",
+      limit: "500",
+    });
+    params.set("client_id", `eq.${clientId}`);
+    params.set("is_active", "eq.true");
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/client_churches?${params.toString()}`, {
+      headers: getSupabaseHeaders({ json: false }),
+    });
+    if (!response.ok) return;
+
+    const payload = (await response.json().catch(() => [])) as Array<{
+      totvs_church_id?: string | null;
+      church_name?: string | null;
+      parent_totvs_church_id?: string | null;
+      is_active?: boolean | null;
+    }>;
+
+    const options = payload
+      .filter((row) => row.is_active !== false)
+      .map((row) => String(row.church_name || "").trim())
+      .filter((item) => item && item !== churchName)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+    setDestinationOptions(Array.from(new Set(options)));
+  };
+
   const loadCards = async () => {
     if (!clientId || !phone || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
 
@@ -221,7 +259,7 @@ export default function Obreiro() {
   const refreshPage = async () => {
     setLoading(true);
     try {
-      await Promise.all([loadProfile(), loadCards()]);
+      await Promise.all([loadProfile(), loadDestinationOptions(), loadCards()]);
     } finally {
       setLoading(false);
     }
@@ -234,7 +272,7 @@ export default function Obreiro() {
   useEffect(() => {
     if (!clientId || !phone) return;
     const id = window.setInterval(() => {
-      void Promise.all([loadProfile(), loadCards()]);
+      void Promise.all([loadProfile(), loadDestinationOptions(), loadCards()]);
     }, CACHE_REFRESH_MS);
     return () => window.clearInterval(id);
   }, [clientId, phone, profile.status_carta]);
@@ -317,8 +355,11 @@ export default function Obreiro() {
       toast.error("Seu acesso esta bloqueado. Procure o pastor.");
       return;
     }
+    if (!profile.cargo_ministerial.trim()) {
+      toast.error("Preencha o cargo ministerial no seu cadastro antes de gerar a carta.");
+      return;
+    }
     setLetterForm({ ...emptyLetterForm, ministerial: profile.cargo_ministerial || "" });
-    setLetterPayloadPreview(null);
     setCreateOpen(true);
   };
 
@@ -330,7 +371,7 @@ export default function Obreiro() {
     email: profile.email || "",
     ministerial: letterForm.ministerial || profile.cargo_ministerial,
     igreja_origem: churchName,
-    igreja_destino: letterForm.igreja_destino,
+    igreja_destino: (letterForm.igreja_destino || letterForm.igreja_destino_manual).trim(),
     dia_pregacao: formatDateBr(letterForm.dia_pregacao),
     data_emissao: formatDateBr(new Date().toISOString().slice(0, 10)),
     data_da_separacao: formatDateBr(profile.data_ordenacao),
@@ -339,13 +380,17 @@ export default function Obreiro() {
   });
 
   const handleCreateLetter = async () => {
-    if (!(letterForm.ministerial || profile.cargo_ministerial) || !letterForm.igreja_destino.trim() || !letterForm.dia_pregacao) {
+    const igrejaDestinoFinal = (letterForm.igreja_destino || letterForm.igreja_destino_manual).trim();
+    if (!(letterForm.ministerial || profile.cargo_ministerial) || !igrejaDestinoFinal || !letterForm.dia_pregacao) {
       toast.error("Preencha funcao ministerial, igreja destino e data da pregacao.");
+      return;
+    }
+    if (letterForm.dia_pregacao < todayIso || letterForm.dia_pregacao > maxPregacaoIso) {
+      toast.error("A data da pregacao deve ficar entre hoje e os proximos 30 dias.");
       return;
     }
 
     const payload = buildLetterPayload();
-    setLetterPayloadPreview(payload);
 
     if (!LETTER_CREATE_WEBHOOK_URL) {
       toast.success("Payload da carta montado com sucesso.");
@@ -442,6 +487,11 @@ export default function Obreiro() {
               <Badge variant="outline" className={blocked ? "border-rose-300 bg-rose-100 text-rose-700" : "border-emerald-300 bg-emerald-100 text-emerald-700"}>
                 {profile.status || "AUTORIZADO"}
               </Badge>
+              {profile.cargo_ministerial && (
+                <Badge variant="outline" className="border-slate-300 bg-slate-100 text-slate-700">
+                  {profile.cargo_ministerial}
+                </Badge>
+              )}
               {String(profile.status_carta || "").trim().toUpperCase() === "LIBERADA" && (
                 <Badge variant="outline" className="border-sky-300 bg-sky-100 text-sky-700">
                   Liberacao automatica
@@ -459,6 +509,9 @@ export default function Obreiro() {
                 Nova carta
               </Button>
               {blocked && <span className="text-sm text-rose-700">Seu acesso esta bloqueado. Procure o pastor.</span>}
+              {!blocked && !profile.cargo_ministerial.trim() && (
+                <span className="text-sm text-amber-700">Preencha seu cargo ministerial no cadastro para gerar carta.</span>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -612,55 +665,133 @@ export default function Obreiro() {
       </main>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] max-w-6xl overflow-y-auto p-3 sm:p-6">
           <DialogHeader>
-            <DialogTitle>Nova carta</DialogTitle>
-            <DialogDescription>Formulario customizado para montar o payload da carta.</DialogDescription>
+            <DialogTitle>Registro de Carta de Pregacao</DialogTitle>
+            <DialogDescription>Preencha os dados para emissao da carta.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Nome</Label>
-              <Input value={profile.nome} disabled />
-            </div>
-            <div className="space-y-2">
-              <Label>Telefone</Label>
-              <Input value={profile.telefone} disabled />
-            </div>
-            <div className="space-y-2">
-              <Label>Funcao ministerial</Label>
-              <Select value={letterForm.ministerial || profile.cargo_ministerial} onValueChange={(value) => setLetterForm((prev) => ({ ...prev, ministerial: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ministerialOptions.map((item) => (
-                    <SelectItem key={item} value={item}>{item}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Data da pregacao</Label>
-              <Input type="date" value={letterForm.dia_pregacao} onChange={(e) => setLetterForm((prev) => ({ ...prev, dia_pregacao: e.target.value }))} />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Igreja origem</Label>
-              <Input value={churchName} disabled />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Igreja destino</Label>
-              <Input value={letterForm.igreja_destino} onChange={(e) => setLetterForm((prev) => ({ ...prev, igreja_destino: e.target.value }))} placeholder="Digite a igreja destino" />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Payload</Label>
-              <Textarea value={letterPayloadPreview ? JSON.stringify(letterPayloadPreview, null, 2) : JSON.stringify(buildLetterPayload(), null, 2)} readOnly className="min-h-52 font-mono text-xs" />
-            </div>
+          <div className="grid gap-4 sm:gap-6 xl:grid-cols-[1.35fr_1fr]">
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="space-y-1">
+                <CardTitle className="flex items-start gap-2 text-xl font-display text-slate-900 sm:items-center sm:text-2xl">
+                  <FileText className="h-6 w-6 text-primary" /> Registro de Carta de Pregacao
+                </CardTitle>
+                <CardDescription>Preencha os dados para emissao da carta</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="space-y-2">
+                  <Label>Nome do pregador</Label>
+                  <Input value={profile.nome} disabled />
+                </div>
+                <div className="space-y-2">
+                  <Label>Telefone</Label>
+                  <Input value={profile.telefone} disabled placeholder="Digite o telefone" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Igreja que faz a carta (origem)</Label>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Input value={churchName} disabled className="pl-10" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Funcao ministerial</Label>
+                  <Input value={profile.cargo_ministerial || "Nao informado"} disabled />
+                </div>
+                <div className="space-y-2">
+                  <Label>Igreja que vai pregar (destino)</Label>
+                  <Select value={letterForm.igreja_destino} onValueChange={(value) => setLetterForm((prev) => ({ ...prev, igreja_destino: value, igreja_destino_manual: "" }))} disabled={!!letterForm.igreja_destino_manual.trim()}>
+                    <SelectTrigger className="pl-10 relative">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <SelectValue placeholder={destinationOptions.length ? "Buscar por nome ou codigo TOTVS" : "Sem igrejas cadastradas na tabela"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {destinationOptions.map((item) => (
+                        <SelectItem key={item} value={item}>{item}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Outros (se nao encontrar)</Label>
+                  <Input
+                    value={letterForm.igreja_destino_manual}
+                    onChange={(e) => setLetterForm((prev) => ({ ...prev, igreja_destino_manual: e.target.value, igreja_destino: "" }))}
+                    placeholder="Digite a igreja manualmente"
+                    disabled={!!letterForm.igreja_destino.trim()}
+                  />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Data da pregacao</Label>
+                    <Input type="date" min={todayIso} max={maxPregacaoIso} value={letterForm.dia_pregacao} onChange={(e) => setLetterForm((prev) => ({ ...prev, dia_pregacao: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Data de emissao da carta</Label>
+                    <Input value={formatDateBr(todayIso)} disabled />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">A data da pregacao pode ser escolhida entre hoje e os proximos 30 dias.</p>
+              </CardContent>
+            </Card>
+            <Card className="overflow-hidden border-emerald-100 shadow-sm">
+              <CardHeader className="bg-emerald-50/80">
+                <CardTitle className="flex items-start gap-2 text-xl font-display text-slate-900 sm:items-center sm:text-2xl">
+                  <FileText className="h-6 w-6 text-emerald-600" /> Pre-visualizacao da Carta
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5 p-5">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Pregador</p>
+                  <div className="flex items-start gap-3 text-slate-900 sm:items-center">
+                    <UserCircle2 className="h-5 w-5 text-emerald-600" />
+                    <span className="text-base font-semibold sm:text-lg">{profile.nome || "Nao informado"}</span>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Igreja de origem e destino</p>
+                  <div className="space-y-2 text-slate-900">
+                    <div className="text-base font-semibold sm:text-lg">{churchName || "Nao informada"}</div>
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <Building2 className="h-4 w-4 text-slate-400" />
+                      <span>{(letterForm.igreja_destino || letterForm.igreja_destino_manual).trim() || "-"}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Data de emissao</p>
+                    <div className="flex items-center gap-2 text-base font-semibold text-slate-900 sm:text-lg">
+                      <CalendarDays className="h-5 w-5 text-emerald-600" />
+                      <span>{formatDateBr(todayIso)}</span>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Data da pregacao</p>
+                    <div className="flex items-center gap-2 text-base font-semibold text-slate-900 sm:text-lg">
+                      <CalendarDays className="h-5 w-5 text-emerald-600" />
+                      <span>{letterForm.dia_pregacao ? formatDateBr(letterForm.dia_pregacao) : "-"}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Pastor responsavel da igreja</p>
+                  <div className="space-y-2 text-slate-900">
+                    <div className="text-base font-semibold sm:text-lg">{pastorName || "Nao informado"}</div>
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <Phone className="h-4 w-4 text-slate-400" />
+                      <span>{profile.telefone || "-"}</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Fechar</Button>
-            <Button type="button" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => void handleCreateLetter()} disabled={creatingLetter}>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} className="w-full sm:w-auto">Fechar</Button>
+            <Button type="button" className="w-full bg-emerald-600 text-white hover:bg-emerald-700 sm:w-auto" onClick={() => void handleCreateLetter()} disabled={creatingLetter}>
               {creatingLetter ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Montar payload
+              Enviar carta
             </Button>
           </div>
         </DialogContent>
