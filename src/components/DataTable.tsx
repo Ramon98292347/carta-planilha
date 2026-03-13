@@ -567,6 +567,73 @@ export function DataTable({
       },
     }));
   };
+  const applyWebhookResultToRow = (row: Record<string, string>, result: Record<string, any> | null | undefined) => {
+    if (!result) return;
+
+    const currentRow = resolveRow(row);
+    const docId = String(result.docId || getDocId(currentRow)).trim();
+    const phone = getPhoneDigits(currentRow);
+    const nowIso = new Date().toISOString();
+    const partial: Record<string, string> = {};
+
+    const action = String(result.action || "").trim();
+    const statusCarta = String(result.statusCarta || "").trim();
+    const envio = String(result.envio || "").trim();
+    const driveStatus = String(result.driveStatus || "").trim();
+    const liberadoPor = String(result.liberadoPor || "").trim();
+
+    if (statusCarta) {
+      partial.status_carta = statusCarta;
+      partial["Status Carta"] = statusCarta;
+      partial.status = statusCarta;
+    }
+
+    if (envio) {
+      partial.envio = envio;
+      partial["Envio"] = envio;
+      if (envio === "ENVIADO") {
+        partial.data_envio = nowIso;
+        partial["Data Envio"] = nowIso;
+      }
+    }
+
+    if (driveStatus) {
+      partial.drive_status = driveStatus;
+      partial["Drive Status"] = driveStatus;
+    }
+
+    if (liberadoPor) {
+      partial.liberado_por = liberadoPor;
+      partial["Liberado Por"] = liberadoPor;
+    }
+
+    if (action === "set_status_carta" || action === "send_letter") {
+      partial.status_carta = partial.status_carta || "LIBERADA";
+      partial["Status Carta"] = partial["Status Carta"] || "LIBERADA";
+      partial.status = partial.status || "LIBERADA";
+    }
+
+    if (action === "set_envio") {
+      partial.envio = partial.envio || "ENVIADO";
+      partial["Envio"] = partial["Envio"] || "ENVIADO";
+      partial.data_envio = partial.data_envio || nowIso;
+      partial["Data Envio"] = partial["Data Envio"] || nowIso;
+    }
+
+    if (action === "move_sent") {
+      partial.drive_status = partial.drive_status || "CARTA_ENVIADA";
+      partial["Drive Status"] = partial["Drive Status"] || "CARTA_ENVIADA";
+    }
+
+    if (docId && Object.keys(partial).length > 0) {
+      applyRowOverride(docId, partial);
+    }
+
+    if (phone && Object.keys(partial).length > 0) {
+      applyPhoneOverride(phone, partial);
+    }
+  };
+
 
   const liberarCarta = async (row: Record<string, string>) => {
     const currentRow = resolveRow(row);
@@ -590,11 +657,11 @@ export function DataTable({
     try {
       const pastorName = (localStorage.getItem("pastor_name") || "Pastor").trim() || "Pastor";
       const sendResult = await callLettersWebhook(buildSendLetterPayload(currentRow, "manual", pastorName));
-      const nextStatus = (sendResult?.statusCarta || "LIBERADA").trim();
-      applyRowOverride(docId, {
-        status_carta: nextStatus,
-        status: nextStatus,
-        liberado_por: pastorName,
+      applyWebhookResultToRow(currentRow, {
+        ...sendResult,
+        action: sendResult?.action || "send_letter",
+        statusCarta: sendResult?.statusCarta || "LIBERADA",
+        liberadoPor: sendResult?.liberadoPor || pastorName,
       });
       toast.success((sendResult?.message || "Carta liberada com sucesso").trim());
       await onRefetchCache?.();
@@ -624,12 +691,10 @@ export function DataTable({
         docId,
         envio: "ENVIADO",
       });
-      const now = new Date();
-      const nextEnvio = (result?.envio || "ENVIADO").trim();
-      applyRowOverride(docId, {
-        envio: nextEnvio,
-        data_envio: now.toISOString(),
-        envio_data: now.toISOString(),
+      applyWebhookResultToRow(currentRow, {
+        ...result,
+        action: result?.action || "set_envio",
+        envio: result?.envio || "ENVIADO",
       });
       toast.success((result?.message || "Carta Enviada Com Sucesso").trim());
       await onRefetchCache?.();
@@ -658,9 +723,11 @@ export function DataTable({
         action: "move_sent",
         docId,
       });
-      const nextDrive = (result?.driveStatus || "CARTA_ENVIADA").trim();
-      applyRowOverride(docId, { drive_status: nextDrive });
-      toast.success((result?.message || "Carta movida para enviada com sucesso").trim());
+      applyWebhookResultToRow(currentRow, {
+        ...result,
+        action: result?.action || "move_sent",
+        driveStatus: result?.driveStatus || "CARTA_ENVIADA",
+      });
       await onRefetchCache?.();
     } catch (err: any) {
       toast.error(err?.message || "N?o foi poss?vel mover a carta.");
@@ -757,6 +824,7 @@ export function DataTable({
   };
 
   useEffect(() => {
+    if (!clientConfig) return;
     const rows = data.map((r) => resolveRow(r));
 
     rows.forEach((row) => {
@@ -782,9 +850,10 @@ export function DataTable({
         try {
           const result = await callLettersWebhook(buildSendLetterPayload(row, "automatico", "LIBERACAO_AUTOMATICA"));
           autoSentDocIdsRef.current.add(docId);
-          applyRowOverride(docId, {
-            status_carta: String(result?.statusCarta || "LIBERADA").trim() || "LIBERADA",
-            envio: String(result?.envio || row.envio || "").trim(),
+          applyWebhookResultToRow(row, {
+            ...result,
+            action: result?.action || "send_letter",
+            statusCarta: result?.statusCarta || "LIBERADA",
           });
           toast.success(String(result?.message || "Carta enviada automaticamente").trim());
           await onRefetchCache?.();
