@@ -37,6 +37,7 @@ Deno.serve(async (req) => {
     const email = String(body.email || "").trim();
     const dataNascimento = String(body.data_nascimento || "").trim();
     const dataOrdenacao = String(body.data_ordenacao || "").trim();
+    const cargoMinisterial = String(body.cargo_ministerial || "").trim();
     const cep = String(body.cep || "").trim();
     const endereco = String(body.endereco || "").trim();
     const numero = String(body.numero || "").trim();
@@ -70,6 +71,7 @@ Deno.serve(async (req) => {
       email: email || null,
       data_nascimento: dataNascimento || null,
       data_ordenacao: dataOrdenacao || null,
+      cargo_ministerial: cargoMinisterial || null,
       cep: cep || null,
       endereco: endereco || null,
       numero: numero || null,

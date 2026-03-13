@@ -7,12 +7,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 import { toast } from "sonner";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
+const LETTER_CREATE_WEBHOOK_URL = (
+  import.meta.env.VITE_CARTAS_CREATE_WEBHOOK_URL || "https://n8n-n8n.ynlng8.easypanel.host/webhook/carta-pregacao"
+).trim();
 const CACHE_REFRESH_MS = 30000;
+
+const ministerialOptions = ["Membro", "Cooperador", "Di\u00e1cono", "Presb\u00edtero", "Pastor"];
 
 type ObreiroProfile = {
   id: string;
@@ -23,6 +31,7 @@ type ObreiroProfile = {
   status_carta: string;
   data_nascimento: string;
   data_ordenacao: string;
+  cargo_ministerial: string;
   cep: string;
   endereco: string;
   numero: string;
@@ -34,6 +43,12 @@ type ObreiroProfile = {
 
 type CartaRow = Record<string, string>;
 
+type LetterFormState = {
+  ministerial: string;
+  igreja_destino: string;
+  dia_pregacao: string;
+};
+
 const emptyProfile: ObreiroProfile = {
   id: "",
   nome: "",
@@ -43,6 +58,7 @@ const emptyProfile: ObreiroProfile = {
   status_carta: "",
   data_nascimento: "",
   data_ordenacao: "",
+  cargo_ministerial: "",
   cep: "",
   endereco: "",
   numero: "",
@@ -52,9 +68,28 @@ const emptyProfile: ObreiroProfile = {
   uf: "",
 };
 
-const normalizePhone = (value: string) => (value || "").replace(/\D/g, "");
+const emptyLetterForm: LetterFormState = {
+  ministerial: "",
+  igreja_destino: "",
+  dia_pregacao: "",
+};
 
+const normalizePhone = (value: string) => (value || "").replace(/\D/g, "");
 const isBlockedStatusValue = (value: string) => String(value || "").trim().toUpperCase() === "BLOQUEADO";
+
+const formatDisplayDate = (value: string) => {
+  const raw = String(value || "").trim();
+  return raw || "-";
+};
+
+const formatDateBr = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) return raw;
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return raw;
+  return `${match[3]}/${match[2]}/${match[1]}`;
+};
 
 const getCartaStatus = (row: CartaRow, profile: ObreiroProfile) => {
   const statusUsuario = String(profile.status || row.status_usuario || row["Status Usuario"] || "").trim().toUpperCase();
@@ -78,19 +113,12 @@ const getCartaStatusClass = (label: string) => {
   return "border-emerald-200 bg-emerald-50 text-emerald-700";
 };
 
-const formatDisplayDate = (value: string) => {
-  const raw = String(value || "").trim();
-  if (!raw) return "-";
-  return raw;
-};
-
 export default function Obreiro() {
   const navigate = useNavigate();
   const clientId = (localStorage.getItem("clientId") || "").trim();
   const phone = normalizePhone(localStorage.getItem("obreiro_telefone") || "");
   const churchName = (localStorage.getItem("church_name") || "").trim();
   const pastorName = (localStorage.getItem("pastor_name") || "").trim();
-  const googleFormUrl = (localStorage.getItem("google_form_url") || "").trim();
 
   const [profile, setProfile] = useState<ObreiroProfile>(() => ({
     ...emptyProfile,
@@ -100,6 +128,7 @@ export default function Obreiro() {
     status: (localStorage.getItem("obreiro_status") || "").trim(),
     data_nascimento: (localStorage.getItem("obreiro_data_nascimento") || "").trim(),
     data_ordenacao: (localStorage.getItem("obreiro_data_ordenacao") || "").trim(),
+    cargo_ministerial: (localStorage.getItem("obreiro_cargo_ministerial") || "").trim(),
     cep: (localStorage.getItem("obreiro_cep") || "").trim(),
     endereco: (localStorage.getItem("obreiro_endereco") || "").trim(),
     numero: (localStorage.getItem("obreiro_numero") || "").trim(),
@@ -111,6 +140,10 @@ export default function Obreiro() {
   const [cards, setCards] = useState<CartaRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creatingLetter, setCreatingLetter] = useState(false);
+  const [letterForm, setLetterForm] = useState<LetterFormState>(emptyLetterForm);
+  const [letterPayloadPreview, setLetterPayloadPreview] = useState<Record<string, string> | null>(null);
 
   const blocked = useMemo(() => isBlockedStatusValue(profile.status), [profile.status]);
 
@@ -118,7 +151,7 @@ export default function Obreiro() {
     if (!clientId || !phone || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
 
     const params = new URLSearchParams({
-      select: "id,nome,telefone,email,status,status_carta,data_nascimento,data_ordenacao,cep,endereco,numero,complemento,bairro,cidade,uf",
+      select: "id,nome,telefone,email,status,status_carta,data_nascimento,data_ordenacao,cargo_ministerial,cep,endereco,numero,complemento,bairro,cidade,uf",
       limit: "1",
     });
     params.set("client_id", `eq.${clientId}`);
@@ -142,6 +175,7 @@ export default function Obreiro() {
       status_carta: String(row.status_carta || "").trim(),
       data_nascimento: String(row.data_nascimento || "").trim(),
       data_ordenacao: String(row.data_ordenacao || "").trim(),
+      cargo_ministerial: String(row.cargo_ministerial || "").trim(),
       cep: String(row.cep || "").trim(),
       endereco: String(row.endereco || "").trim(),
       numero: String(row.numero || "").trim(),
@@ -158,6 +192,7 @@ export default function Obreiro() {
     localStorage.setItem("obreiro_email", nextProfile.email || "");
     localStorage.setItem("obreiro_data_nascimento", nextProfile.data_nascimento || "");
     localStorage.setItem("obreiro_data_ordenacao", nextProfile.data_ordenacao || "");
+    localStorage.setItem("obreiro_cargo_ministerial", nextProfile.cargo_ministerial || "");
     localStorage.setItem("obreiro_cep", nextProfile.cep || "");
     localStorage.setItem("obreiro_endereco", nextProfile.endereco || "");
     localStorage.setItem("obreiro_numero", nextProfile.numero || "");
@@ -235,15 +270,11 @@ export default function Obreiro() {
         headers: getSupabaseHeaders({ json: false }),
       });
 
-      if (!response.ok) {
-        throw new Error("Nao foi possivel localizar o cadastro do obreiro.");
-      }
+      if (!response.ok) throw new Error("Nao foi possivel localizar o cadastro do obreiro.");
 
       const payload = (await response.json().catch(() => [])) as Array<{ id?: string }>;
       const id = String(payload?.[0]?.id || profile.id || "").trim();
-      if (!id) {
-        throw new Error("Cadastro do obreiro nao encontrado.");
-      }
+      if (!id) throw new Error("Cadastro do obreiro nao encontrado.");
 
       const updateParams = new URLSearchParams({ select: "id" });
       updateParams.set("id", `eq.${id}`);
@@ -259,6 +290,7 @@ export default function Obreiro() {
           email: profile.email.trim() || null,
           data_nascimento: profile.data_nascimento.trim() || null,
           data_ordenacao: profile.data_ordenacao.trim() || null,
+          cargo_ministerial: profile.cargo_ministerial.trim() || null,
           cep: profile.cep.trim() || null,
           endereco: profile.endereco.trim() || null,
           numero: profile.numero.trim() || null,
@@ -269,9 +301,7 @@ export default function Obreiro() {
         }),
       });
 
-      if (!updateRes.ok) {
-        throw new Error("Nao foi possivel atualizar o cadastro.");
-      }
+      if (!updateRes.ok) throw new Error("Nao foi possivel atualizar o cadastro.");
 
       toast.success("Cadastro atualizado com sucesso.");
       await loadProfile();
@@ -279,6 +309,68 @@ export default function Obreiro() {
       toast.error(err?.message || "Nao foi possivel atualizar o cadastro.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openLetterDialog = () => {
+    if (blocked) {
+      toast.error("Seu acesso esta bloqueado. Procure o pastor.");
+      return;
+    }
+    setLetterForm({ ...emptyLetterForm, ministerial: profile.cargo_ministerial || "" });
+    setLetterPayloadPreview(null);
+    setCreateOpen(true);
+  };
+
+  const buildLetterPayload = () => ({
+    client_id: clientId,
+    obreiro_id: profile.id,
+    nome: profile.nome,
+    telefone: profile.telefone,
+    email: profile.email || "",
+    ministerial: letterForm.ministerial || profile.cargo_ministerial,
+    igreja_origem: churchName,
+    igreja_destino: letterForm.igreja_destino,
+    dia_pregacao: formatDateBr(letterForm.dia_pregacao),
+    data_emissao: formatDateBr(new Date().toISOString().slice(0, 10)),
+    data_da_separacao: formatDateBr(profile.data_ordenacao),
+    status_usuario: profile.status || "AUTORIZADO",
+    status_carta: profile.status_carta || "GERADA",
+  });
+
+  const handleCreateLetter = async () => {
+    if (!(letterForm.ministerial || profile.cargo_ministerial) || !letterForm.igreja_destino.trim() || !letterForm.dia_pregacao) {
+      toast.error("Preencha funcao ministerial, igreja destino e data da pregacao.");
+      return;
+    }
+
+    const payload = buildLetterPayload();
+    setLetterPayloadPreview(payload);
+
+    if (!LETTER_CREATE_WEBHOOK_URL) {
+      toast.success("Payload da carta montado com sucesso.");
+      return;
+    }
+
+    setCreatingLetter(true);
+    try {
+      const response = await fetch(LETTER_CREATE_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result?.ok === false) {
+        throw new Error(String(result?.error || result?.message || "Nao foi possivel enviar a carta.").trim());
+      }
+
+      toast.success(String(result?.message || "Carta enviada para processamento.").trim());
+      setCreateOpen(false);
+    } catch (err: any) {
+      toast.error(err?.message || "Nao foi possivel enviar a carta.");
+    } finally {
+      setCreatingLetter(false);
     }
   };
 
@@ -301,6 +393,7 @@ export default function Obreiro() {
       "obreiro_email",
       "obreiro_data_nascimento",
       "obreiro_data_ordenacao",
+      "obreiro_cargo_ministerial",
       "obreiro_cep",
       "obreiro_endereco",
       "obreiro_numero",
@@ -362,13 +455,8 @@ export default function Obreiro() {
               <div>Enviadas: <strong>{stats.enviadas}</strong></div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                className="bg-emerald-600 text-white hover:bg-emerald-700"
-                onClick={() => googleFormUrl && window.open(googleFormUrl, "_blank", "noopener,noreferrer")}
-                disabled={!googleFormUrl || blocked}
-              >
-                Fazer carta
+              <Button type="button" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={openLetterDialog} disabled={blocked}>
+                Nova carta
               </Button>
               {blocked && <span className="text-sm text-rose-700">Seu acesso esta bloqueado. Procure o pastor.</span>}
             </div>
@@ -419,23 +507,21 @@ export default function Obreiro() {
                           <div className="space-y-1 text-sm">
                             <div className="font-medium text-foreground">{row.igreja_destino || row.ipda_destino || "Destino nao informado"}</div>
                             <div className="text-muted-foreground">Origem: {row.igreja_origem || "-"}</div>
-                            <div className="text-muted-foreground">Data da pregacao: {formatDisplayDate(row.data_pregacao || row["Data da pregação."] || "-")}</div>
+                            <div className="text-muted-foreground">Data da pregacao: {formatDisplayDate(row.data_pregacao || row["Data da pregacao."] || "-")}</div>
                             <div className="text-muted-foreground">Emissao: {formatDisplayDate(row.data_emissao || row["Carimbo de data/hora"] || "-")}</div>
                           </div>
                           <div className="flex flex-col items-start gap-2 md:items-end">
                             <Badge variant="outline" className={getCartaStatusClass(statusLabel)}>
                               {statusLabel}
                             </Badge>
-                            <div className="flex gap-2">
-                              <Button
-                                type="button"
-                                className="bg-emerald-600 text-white hover:bg-emerald-700"
-                                onClick={() => pdfUrl && window.open(pdfUrl, "_blank", "noopener,noreferrer")}
-                                disabled={!pdfUrl}
-                              >
-                                Abrir PDF
-                              </Button>
-                            </div>
+                            <Button
+                              type="button"
+                              className="bg-emerald-600 text-white hover:bg-emerald-700"
+                              onClick={() => pdfUrl && window.open(pdfUrl, "_blank", "noopener,noreferrer")}
+                              disabled={!pdfUrl}
+                            >
+                              Abrir PDF
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -472,6 +558,19 @@ export default function Obreiro() {
                 <div className="space-y-2">
                   <Label htmlFor="data_ordenacao">Data da ordenacao</Label>
                   <Input id="data_ordenacao" type="date" value={profile.data_ordenacao} onChange={(e) => handleProfileChange("data_ordenacao", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cargo_ministerial">Cargo ministerial</Label>
+                  <Select value={profile.cargo_ministerial} onValueChange={(value) => handleProfileChange("cargo_ministerial", value)}>
+                    <SelectTrigger id="cargo_ministerial">
+                      <SelectValue placeholder="Selecione o cargo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ministerialOptions.map((item) => (
+                        <SelectItem key={item} value={item}>{item}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="cep">CEP</Label>
@@ -511,6 +610,61 @@ export default function Obreiro() {
           </TabsContent>
         </Tabs>
       </main>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Nova carta</DialogTitle>
+            <DialogDescription>Formulario customizado para montar o payload da carta.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Nome</Label>
+              <Input value={profile.nome} disabled />
+            </div>
+            <div className="space-y-2">
+              <Label>Telefone</Label>
+              <Input value={profile.telefone} disabled />
+            </div>
+            <div className="space-y-2">
+              <Label>Funcao ministerial</Label>
+              <Select value={letterForm.ministerial || profile.cargo_ministerial} onValueChange={(value) => setLetterForm((prev) => ({ ...prev, ministerial: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ministerialOptions.map((item) => (
+                    <SelectItem key={item} value={item}>{item}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Data da pregacao</Label>
+              <Input type="date" value={letterForm.dia_pregacao} onChange={(e) => setLetterForm((prev) => ({ ...prev, dia_pregacao: e.target.value }))} />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Igreja origem</Label>
+              <Input value={churchName} disabled />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Igreja destino</Label>
+              <Input value={letterForm.igreja_destino} onChange={(e) => setLetterForm((prev) => ({ ...prev, igreja_destino: e.target.value }))} placeholder="Digite a igreja destino" />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Payload</Label>
+              <Textarea value={letterPayloadPreview ? JSON.stringify(letterPayloadPreview, null, 2) : JSON.stringify(buildLetterPayload(), null, 2)} readOnly className="min-h-52 font-mono text-xs" />
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Fechar</Button>
+            <Button type="button" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => void handleCreateLetter()} disabled={creatingLetter}>
+              {creatingLetter ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Montar payload
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

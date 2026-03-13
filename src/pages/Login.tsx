@@ -4,12 +4,14 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
+const ministerialOptions = ["Membro", "Cooperador", "Di\u00e1cono", "Presb\u00edtero", "Pastor"];
 
 type LoginResponse = {
   ok: boolean;
@@ -27,6 +29,7 @@ type LoginResponse = {
   obreiro_email?: string | null;
   obreiro_data_nascimento?: string | null;
   obreiro_data_ordenacao?: string | null;
+  obreiro_cargo_ministerial?: string | null;
   obreiro_cep?: string | null;
   obreiro_endereco?: string | null;
   obreiro_numero?: string | null;
@@ -62,6 +65,7 @@ export default function Login() {
   const [signupPhone, setSignupPhone] = useState("");
   const [signupBirthDate, setSignupBirthDate] = useState("");
   const [signupOrdinationDate, setSignupOrdinationDate] = useState("");
+  const [signupMinisterial, setSignupMinisterial] = useState("");
   const [signupCep, setSignupCep] = useState("");
   const [signupAddress, setSignupAddress] = useState("");
   const [signupNumber, setSignupNumber] = useState("");
@@ -91,6 +95,7 @@ export default function Login() {
     setSignupPhone(mode === "obreiro" ? phone : "");
     setSignupBirthDate("");
     setSignupOrdinationDate("");
+    setSignupMinisterial("");
     setSignupCep("");
     setSignupAddress("");
     setSignupNumber("");
@@ -314,6 +319,7 @@ export default function Login() {
         localStorage.setItem("obreiro_email", result.obreiro_email || "");
         localStorage.setItem("obreiro_data_nascimento", result.obreiro_data_nascimento || "");
         localStorage.setItem("obreiro_data_ordenacao", result.obreiro_data_ordenacao || "");
+        localStorage.setItem("obreiro_cargo_ministerial", result.obreiro_cargo_ministerial || "");
         localStorage.setItem("obreiro_cep", result.obreiro_cep || "");
         localStorage.setItem("obreiro_endereco", result.obreiro_endereco || "");
         localStorage.setItem("obreiro_numero", result.obreiro_numero || "");
@@ -377,6 +383,7 @@ export default function Login() {
               email: signupEmail.trim(),
               data_nascimento: signupBirthDate.trim(),
               data_ordenacao: signupOrdinationDate.trim(),
+              cargo_ministerial: signupMinisterial.trim(),
               cep: normalizeCep(signupCep),
               endereco: signupAddress.trim(),
               numero: signupNumber.trim(),
@@ -589,7 +596,7 @@ export default function Login() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <span className="text-xs text-muted-foreground">Data da ordenação</span>
+                  <span className="text-xs text-muted-foreground">Data da ordenacao</span>
                   <Input
                     type="date"
                     value={signupOrdinationDate}
@@ -655,6 +662,19 @@ export default function Login() {
                   onChange={(e) => setSignupEmail(e.target.value)}
                   disabled={signupLoading}
                 />
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Cargo ministerial</span>
+                  <Select value={signupMinisterial} onValueChange={setSignupMinisterial} disabled={signupLoading}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o cargo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ministerialOptions.map((item) => (
+                        <SelectItem key={item} value={item}>{item}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Input
                   placeholder="Telefone"
                   value={signupPhone}
@@ -670,6 +690,15 @@ export default function Login() {
                     disabled={signupLoading}
                   />
                 </div>
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Data da ordenacao</span>
+                  <Input
+                    type="date"
+                    value={signupOrdinationDate}
+                    onChange={(e) => setSignupOrdinationDate(e.target.value)}
+                    disabled={signupLoading}
+                  />
+                </div>
                 <Input
                   placeholder="CEP"
                   value={signupCep}
@@ -678,13 +707,13 @@ export default function Login() {
                   disabled={signupLoading}
                 />
                 <Input
-                  placeholder="Endereço"
+                  placeholder="Endereco"
                   value={signupAddress}
                   onChange={(e) => setSignupAddress(e.target.value)}
                   disabled={signupLoading}
                 />
                 <Input
-                  placeholder="Número"
+                  placeholder="Numero"
                   value={signupNumber}
                   onChange={(e) => setSignupNumber(e.target.value)}
                   disabled={signupLoading}
@@ -740,7 +769,7 @@ export default function Login() {
                 signupLoading ||
                 !totvsId.trim() ||
                 !password.trim() ||
-                (mode === "obreiro" ? !signupName.trim() || !signupPhone.trim() : !signupName.trim() || !signupChurchName.trim())
+                (mode === "obreiro" ? !signupName.trim() || !signupPhone.trim() || !signupMinisterial.trim() : !signupName.trim() || !signupChurchName.trim())
               }
             >
               {signupLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

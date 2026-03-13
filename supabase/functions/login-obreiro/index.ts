@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+ï»¿import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import bcrypt from "npm:bcryptjs@2.4.3";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     const findObreiro = async () => {
       const { data, error } = await supabase
         .from("obreiros_auth")
-        .select("id, nome, telefone, senha_hash, status, email, data_nascimento, data_ordenacao, cep, endereco, numero, complemento, bairro, cidade, uf")
+        .select("id, nome, telefone, senha_hash, status, email, data_nascimento, data_ordenacao, cargo_ministerial, cep, endereco, numero, complemento, bairro, cidade, uf")
         .eq("client_id", client.id)
         .eq("telefone", phone)
         .maybeSingle();
@@ -71,8 +71,9 @@ Deno.serve(async (req) => {
       if (!match) return null;
 
       const nome = String(match.nome || match.full_name || "Obreiro").trim() || "Obreiro";
-      const email = String(match.email || match["Endereço de e-mail"] || "").trim();
+      const email = String(match.email || match["EndereÃ§o de e-mail"] || match["Endereco de e-mail"] || "").trim();
       const status = String(match.status_usuario || match.status || "AUTORIZADO").trim() || "AUTORIZADO";
+      const cargoMinisterial = String(match.funcao || match.cargo || "").trim();
       const senhaHash = await bcrypt.hash(password, 10);
 
       const payload = {
@@ -82,6 +83,7 @@ Deno.serve(async (req) => {
         senha_hash: senhaHash,
         status,
         email: email || null,
+        cargo_ministerial: cargoMinisterial || null,
       };
 
       const { data: existing } = await supabase
@@ -118,7 +120,7 @@ Deno.serve(async (req) => {
     }
 
     const statusValue = String(obreiro.status || "").trim().toLowerCase();
-    if (["bloqueado", "nao", "não"].includes(statusValue)) {
+    if (["bloqueado", "nao", "nÃ£o"].includes(statusValue)) {
       return json({ ok: false, error: "Seu pastor te bloqueou. Procure ele para acessar o seu registro." }, 403);
     }
 
@@ -161,6 +163,7 @@ Deno.serve(async (req) => {
       obreiro_email: obreiro.email || null,
       obreiro_data_nascimento: obreiro.data_nascimento || null,
       obreiro_data_ordenacao: obreiro.data_ordenacao || null,
+      obreiro_cargo_ministerial: obreiro.cargo_ministerial || null,
       obreiro_cep: obreiro.cep || null,
       obreiro_endereco: obreiro.endereco || null,
       obreiro_numero: obreiro.numero || null,
