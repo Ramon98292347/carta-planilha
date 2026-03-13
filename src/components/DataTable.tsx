@@ -116,6 +116,33 @@ export function DataTable({
   const seenDocIdsRef = useRef<Set<string>>(new Set());
   const autoSendTimersRef = useRef<Record<string, number>>({});
 
+  const getAutoSentStorageKey = () => {
+    const clientId = (localStorage.getItem("clientId") || "").trim();
+    return clientId ? "cartas_auto_sent_doc_ids:" + clientId : "cartas_auto_sent_doc_ids";
+  };
+
+  const loadAutoSentDocIds = () => {
+    try {
+      const raw = localStorage.getItem(getAutoSentStorageKey()) || "[]";
+      const parsed = JSON.parse(raw);
+      autoSentDocIdsRef.current = new Set(
+        Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : []
+      );
+    } catch {
+      autoSentDocIdsRef.current = new Set();
+    }
+  };
+
+  const persistAutoSentDocId = (docId: string) => {
+    const cleanDocId = String(docId || "").trim();
+    if (!cleanDocId) return;
+    autoSentDocIdsRef.current.add(cleanDocId);
+    localStorage.setItem(getAutoSentStorageKey(), JSON.stringify(Array.from(autoSentDocIdsRef.current)));
+  };
+  useEffect(() => {
+    loadAutoSentDocIds();
+  }, []);
+
   const totalPages = Math.ceil(data.length / PAGE_SIZE);
   const pageData = data.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
@@ -824,6 +851,10 @@ export function DataTable({
       const docId = getDocId(row);
       if (!docId) return;
 
+      if (getEnvioStatus(row) === "ENVIADO") {
+        persistAutoSentDocId(docId);
+      }
+
       const isNewRow = !seenDocIdsRef.current.has(docId);
       if (!isNewRow) return;
 
@@ -843,7 +874,7 @@ export function DataTable({
       autoSendTimersRef.current[docId] = window.setTimeout(async () => {
         try {
           const result = await callLettersWebhook(buildSendLetterPayload(row, "automatico", "LIBERACAO_AUTOMATICA"));
-          autoSentDocIdsRef.current.add(docId);
+          persistAutoSentDocId(docId);
           applyWebhookResultToRow(row, {
             ...result,
             action: result?.action || "send_letter",
