@@ -316,17 +316,42 @@ export default function Obreiro() {
   const loadCards = async () => {
     if (!clientId || !phone || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
 
-    const params = new URLSearchParams({ select: "last_15_cards", limit: "1" });
+    const params = new URLSearchParams({
+      select:
+        "id,doc_id,doc_url,pdf_url,nome,telefone,email,ministerial,igreja_origem,igreja_destino,dia_pregacao,data_emissao,status_usuario,status_carta,envio,drive_status,created_at",
+      limit: "100",
+      order: "created_at.desc",
+    });
     params.set("client_id", `eq.${clientId}`);
+    params.set("telefone", `eq.${phone}`);
 
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/client_cache?${params.toString()}`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/client_letters?${params.toString()}`, {
       headers: getSupabaseHeaders({ json: false }),
     });
     if (!response.ok) return;
 
-    const payload = (await response.json().catch(() => [])) as Array<{ last_15_cards?: CartaRow[] }>;
-    const rows = Array.isArray(payload?.[0]?.last_15_cards) ? payload[0].last_15_cards || [] : [];
-    setCards(rows.filter((row) => normalizePhone(String(row.telefone || row.phone || "")) === phone));
+    const payload = (await response.json().catch(() => [])) as Array<Record<string, string | null>>;
+    const rows = payload.map((row) => ({
+      id: String(row.id || "").trim(),
+      doc_id: String(row.doc_id || "").trim(),
+      doc_url: String(row.doc_url || "").trim(),
+      pdf_url: String(row.pdf_url || "").trim(),
+      nome: String(row.nome || "").trim(),
+      telefone: normalizePhone(String(row.telefone || "")),
+      email: String(row.email || "").trim(),
+      ministerial: String(row.ministerial || "").trim(),
+      igreja_origem: String(row.igreja_origem || "").trim(),
+      igreja_destino: String(row.igreja_destino || "").trim(),
+      data_pregacao: String(row.dia_pregacao || "").trim(),
+      data_emissao: String(row.data_emissao || "").trim(),
+      status_usuario: String(row.status_usuario || "").trim(),
+      status_carta: String(row.status_carta || "").trim(),
+      envio: String(row.envio || "").trim(),
+      drive_status: String(row.drive_status || "").trim(),
+      created_at: String(row.created_at || "").trim(),
+    }));
+
+    setCards(rows);
   };
 
   const refreshPage = async () => {
@@ -350,7 +375,16 @@ export default function Obreiro() {
     return () => window.clearInterval(id);
   }, [clientId, phone, profile.status_carta]);
 
-  const selectedDestination = useMemo(() => destinationOptions.find((item) => item.church_name === letterForm.igreja_destino) || null, [destinationOptions, letterForm.igreja_destino]);
+  const selectedDestination = useMemo(() => {
+    const typed = String(letterForm.igreja_destino || "").trim().toUpperCase();
+    if (!typed) return null;
+    return (
+      destinationOptions.find((item) => item.church_name.trim().toUpperCase() === typed) ||
+      destinationOptions.find((item) => item.totvs_church_id.trim().toUpperCase() === typed) ||
+      destinationOptions.find((item) => `${item.totvs_church_id} ${item.church_name}`.trim().toUpperCase() === typed) ||
+      null
+    );
+  }, [destinationOptions, letterForm.igreja_destino]);
 
   const stats = useMemo(() => {
     const labels = cards.map((row) => getCartaStatus(row, profile));
@@ -578,7 +612,7 @@ export default function Obreiro() {
         });
       }
 
-      toast.success(String(result?.message || "Carta enviada para processamento.").trim());
+      toast.success("Carta enviada");
       setCreateOpen(false);
       await loadCards();
     } catch (err: any) {
@@ -869,17 +903,30 @@ export default function Obreiro() {
                 </div>
                 <div className="space-y-2">
                   <Label>Igreja que vai pregar (destino)</Label>
-                  <Select value={letterForm.igreja_destino} onValueChange={(value) => setLetterForm((prev) => ({ ...prev, igreja_destino: value, igreja_destino_manual: "" }))} disabled={!!letterForm.igreja_destino_manual.trim()}>
-                    <SelectTrigger className="pl-10 relative">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <SelectValue placeholder={destinationOptions.length ? "Buscar por nome ou codigo TOTVS" : "Sem igrejas cadastradas na tabela"} />
-                    </SelectTrigger>
-                    <SelectContent>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      list="destino-igrejas-list"
+                      value={letterForm.igreja_destino}
+                      onChange={(e) =>
+                        setLetterForm((prev) => ({
+                          ...prev,
+                          igreja_destino: e.target.value,
+                          igreja_destino_manual: "",
+                        }))
+                      }
+                      placeholder={destinationOptions.length ? "Digite o TOTVS ou nome da igreja" : "Sem igrejas cadastradas na tabela"}
+                      disabled={!!letterForm.igreja_destino_manual.trim()}
+                      className="pl-10"
+                    />
+                    <datalist id="destino-igrejas-list">
                       {destinationOptions.map((item) => (
-                        <SelectItem key={item.totvs_church_id} value={item.church_name}>{item.church_name}</SelectItem>
+                        <option key={item.totvs_church_id} value={item.church_name}>
+                          {item.totvs_church_id} - {item.church_name}
+                        </option>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </datalist>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Outros (se nao encontrar)</Label>
