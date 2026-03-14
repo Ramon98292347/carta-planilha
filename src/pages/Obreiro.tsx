@@ -16,7 +16,7 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 const CREATE_LETTER_FUNCTION_NAME = (import.meta.env.VITE_CREATE_LETTER_FUNCTION_NAME || "create-letter").trim();
-const OPEN_LETTER_FUNCTION_NAME = (import.meta.env.VITE_OPEN_LETTER_FUNCTION_NAME || "letter").trim();
+const GET_LETTER_PDF_URL_FUNCTION_NAME = (import.meta.env.VITE_GET_LETTER_PDF_URL_FUNCTION_NAME || "get-letter-pdf-url").trim();
 const LIST_LETTERS_FUNCTION_NAME = (import.meta.env.VITE_LIST_LETTERS_FUNCTION_NAME || "list-letters").trim();
 const LIST_NOTIFICATIONS_FUNCTION_NAME = (import.meta.env.VITE_LIST_NOTIFICATIONS_FUNCTION_NAME || "list-notifications").trim();
 const MARK_NOTIFICATIONS_READ_FUNCTION_NAME = (import.meta.env.VITE_MARK_NOTIFICATIONS_READ_FUNCTION_NAME || "mark-notifications-read").trim();
@@ -253,6 +253,7 @@ export default function Obreiro() {
   const [notifications, setNotifications] = useState<ObreiroNotification[]>([]);
   const [lookingUpCep, setLookingUpCep] = useState(false);
   const [searchingDestinations, setSearchingDestinations] = useState(false);
+  const [pdfUrlByLetterId, setPdfUrlByLetterId] = useState<Record<string, string>>({});
 
   const blocked = useMemo(() => isBlockedStatusValue(profile.status), [profile.status]);
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -490,6 +491,72 @@ export default function Obreiro() {
     return () => window.clearTimeout(timer);
   }, [letterForm.igreja_destino, letterForm.igreja_destino_manual, createOpen]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const releasedCards = cards.filter((row) => {
+      const statusLabel = getCartaStatus(row, profile);
+      return (
+        statusLabel === "Carta liberada" ||
+        statusLabel === "Liberacao automatica" ||
+        statusLabel === "Carta enviada"
+      );
+    });
+
+    const directUrls = Object.fromEntries(
+      releasedCards
+        .map((row) => {
+          const directUrl = String(row.pdf_url || row.doc_url || "").trim();
+          return directUrl ? [String(row.id || "").trim(), directUrl] : null;
+        })
+        .filter(Boolean) as Array<[string, string]>,
+    );
+
+    setPdfUrlByLetterId(directUrls);
+
+    const pendingCards = releasedCards.filter((row) => {
+      const id = String(row.id || "").trim();
+      return id && !directUrls[id];
+    });
+
+    if (pendingCards.length === 0) return;
+
+    void (async () => {
+      const resolvedEntries = await Promise.all(
+        pendingCards.map(async (row) => {
+          const id = String(row.id || "").trim();
+          try {
+            const { data, error } = await supabase.functions.invoke<{
+              ok?: boolean;
+              url?: string;
+            }>(GET_LETTER_PDF_URL_FUNCTION_NAME, {
+              body: { letter_id: id },
+            });
+
+            if (error || !data?.ok || !data.url) return null;
+            return [id, data.url] as [string, string];
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      if (cancelled) return;
+
+      const resolvedMap = Object.fromEntries(
+        resolvedEntries.filter(Boolean) as Array<[string, string]>,
+      );
+
+      if (Object.keys(resolvedMap).length > 0) {
+        setPdfUrlByLetterId((prev) => ({ ...prev, ...resolvedMap }));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cards, profile]);
+
   const clearNotifications = () => {
     void supabase.functions
       .invoke(MARK_NOTIFICATIONS_READ_FUNCTION_NAME, {
@@ -626,36 +693,24 @@ export default function Obreiro() {
 
   const handleOpenLetter = async (row: CartaRow) => {
     const statusLabel = getCartaStatus(row, profile);
-    const canOpenPdf =
+    const isReleased =
       statusLabel === "Carta liberada" ||
       statusLabel === "Liberacao automatica" ||
       statusLabel === "Carta enviada";
+    const directUrl = String(pdfUrlByLetterId[String(row.id || "").trim()] || row.pdf_url || row.doc_url || "").trim();
+    const hasReadyFile = !!directUrl;
 
-    if (!canOpenPdf) {
+    if (!isReleased) {
       toast.error("O PDF so pode ser aberto quando a carta estiver liberada.");
       return;
     }
 
-    const directUrl = String(row.pdf_url || row.doc_url || "").trim();
-    if (directUrl) {
-      window.open(directUrl, "_blank", "noopener,noreferrer");
+    if (!hasReadyFile) {
+      toast.error("O PDF ainda nao esta pronto. Aguarde a geracao do arquivo.");
       return;
     }
 
-    const { data, error } = await supabase.functions.invoke<{
-      ok?: boolean;
-      error?: string;
-      url?: string;
-    }>(OPEN_LETTER_FUNCTION_NAME, {
-      body: { letter_id: row.id },
-    });
-
-    if (error || !data?.ok || !data.url) {
-      toast.error(data?.error || error?.message || "Nao foi possivel abrir o PDF.");
-      return;
-    }
-
-    window.open(data.url, "_blank", "noopener,noreferrer");
+    window.open(directUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -846,6 +901,7 @@ export default function Obreiro() {
                             statusLabel === "Carta liberada" ||
                             statusLabel === "Liberacao automatica" ||
                             statusLabel === "Carta enviada";
+                          const hasReadyFile = !!String(pdfUrlByLetterId[String(row.id || "").trim()] || row.pdf_url || row.doc_url || "").trim();
                           return (
                             <tr key={`${row.id || row.doc_id || row.nome || "carta"}-${index}`} className="border-t">
                               <td className="px-4 py-3 font-medium text-foreground">{row.igreja_destino || row.ipda_destino || "Destino nao informado"}</td>
@@ -860,7 +916,7 @@ export default function Obreiro() {
                               <td className="px-4 py-3 text-right">
                                 <Button
                                   type="button"
-                                  disabled={!canOpenPdf}
+                                  disabled={!canOpenPdf || !hasReadyFile}
                                   className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-slate-300 disabled:text-slate-500"
                                   onClick={() => void handleOpenLetter(row)}
                                 >
