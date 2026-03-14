@@ -124,6 +124,14 @@ const formatDateBr = (value: string) => {
   return `${match[3]}/${match[2]}/${match[1]}`;
 };
 
+const parseBrDateToDate = (value: string) => {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  const date = new Date(`${match[3]}-${match[2]}-${match[1]}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const getCartaStatus = (row: CartaRow, profile: ObreiroProfile) => {
   const statusUsuario = String(profile.status || row.status_usuario || row["Status Usuario"] || "").trim().toUpperCase();
   const statusCarta = String(row.status_carta || row.statusCarta || row["Status Carta"] || "").trim().toUpperCase();
@@ -187,6 +195,10 @@ export default function Obreiro() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creatingLetter, setCreatingLetter] = useState(false);
   const [letterForm, setLetterForm] = useState<LetterFormState>(emptyLetterForm);
+  const [cardsPeriodPreset, setCardsPeriodPreset] = useState<"7d" | "30d" | "all">("30d");
+  const [cardsStatusFilter, setCardsStatusFilter] = useState("all");
+  const [cardsDateStart, setCardsDateStart] = useState("");
+  const [cardsDateEnd, setCardsDateEnd] = useState("");
   const [notifications, setNotifications] = useState<ObreiroNotification[]>(() => {
     try {
       const raw = localStorage.getItem(OBREIRO_NOTIFICATIONS_KEY);
@@ -414,6 +426,29 @@ export default function Obreiro() {
       aguardando: labels.filter((item) => item === "Aguardando liberacao").length,
     };
   }, [cards, profile]);
+
+  const filteredCards = useMemo(() => {
+    const now = new Date();
+    const startBoundary = cardsDateStart ? new Date(`${cardsDateStart}T00:00:00`) : null;
+    const endBoundary = cardsDateEnd ? new Date(`${cardsDateEnd}T23:59:59`) : null;
+
+    return cards.filter((row) => {
+      const statusLabel = getCartaStatus(row, profile).toLowerCase();
+      if (cardsStatusFilter !== "all" && statusLabel !== cardsStatusFilter.toLowerCase()) return false;
+
+      const cardDate = parseBrDateToDate(String(row.data_emissao || "").trim());
+      if (cardsPeriodPreset !== "all" && cardDate) {
+        const limit = new Date();
+        limit.setDate(now.getDate() - (cardsPeriodPreset === "7d" ? 7 : 30));
+        if (cardDate < limit || cardDate > now) return false;
+      }
+
+      if (startBoundary && cardDate && cardDate < startBoundary) return false;
+      if (endBoundary && cardDate && cardDate > endBoundary) return false;
+
+      return true;
+    });
+  }, [cards, cardsPeriodPreset, cardsStatusFilter, cardsDateStart, cardsDateEnd, profile]);
 
   const handleProfileChange = (field: keyof ObreiroProfile, value: string) => {
     setProfile((prev) => ({ ...prev, [field]: value }));
@@ -860,7 +895,48 @@ export default function Obreiro() {
                 <CardDescription>As cartas sao filtradas pelo seu client_id e telefone.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {cards.length === 0 ? (
+                <div className="overflow-x-auto">
+                  <div className="flex min-w-max gap-3">
+                    <div className="w-[180px] space-y-2">
+                    <Label>Periodo</Label>
+                    <Select value={cardsPeriodPreset} onValueChange={(value: "7d" | "30d" | "all") => setCardsPeriodPreset(value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Periodo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="7d">Ultimos 7 dias</SelectItem>
+                        <SelectItem value="30d">Ultimos 30 dias</SelectItem>
+                        <SelectItem value="all">Periodo completo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    </div>
+                    <div className="w-[180px] space-y-2">
+                    <Label>Status</Label>
+                    <Select value={cardsStatusFilter} onValueChange={setCardsStatusFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os status</SelectItem>
+                        <SelectItem value="aguardando liberacao">Aguardando liberacao</SelectItem>
+                        <SelectItem value="liberacao automatica">Liberacao automatica</SelectItem>
+                        <SelectItem value="carta liberada">Carta liberada</SelectItem>
+                        <SelectItem value="carta enviada">Carta enviada</SelectItem>
+                        <SelectItem value="bloqueado">Bloqueado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    </div>
+                    <div className="w-[140px] space-y-2">
+                    <Label>De</Label>
+                    <Input type="date" value={cardsDateStart} onChange={(e) => setCardsDateStart(e.target.value)} />
+                    </div>
+                    <div className="w-[140px] space-y-2">
+                    <Label>Ate</Label>
+                    <Input type="date" value={cardsDateEnd} onChange={(e) => setCardsDateEnd(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+                {filteredCards.length === 0 ? (
                   <div className="text-sm text-muted-foreground">Nenhuma carta encontrada para este obreiro.</div>
                 ) : (
                   <div className="overflow-x-auto rounded-lg border bg-card shadow-sm">
@@ -876,7 +952,7 @@ export default function Obreiro() {
                         </tr>
                       </thead>
                       <tbody>
-                        {cards.map((row, index) => {
+                        {filteredCards.map((row, index) => {
                           const statusLabel = getCartaStatus(row, profile);
                           const pdfUrl = String(row.pdf_url || row.url_pdf || row.pdfUrl || row.doc_url || "").trim();
 
