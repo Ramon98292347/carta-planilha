@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Building2, CalendarDays, FileText, Loader2, LogOut, Phone, RefreshCw, Save, Search, TrendingUp, UserCircle2 } from "lucide-react";
+import { Bell, Building2, CalendarDays, FileText, Loader2, LogOut, Phone, Save, Search, TrendingUp, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 import { toast } from "sonner";
 
@@ -18,6 +19,7 @@ const LETTER_CREATE_WEBHOOK_URL = (
   import.meta.env.VITE_CARTAS_CREATE_WEBHOOK_URL || "https://n8n-n8n.ynlng8.easypanel.host/webhook/carta-pregacao"
 ).trim();
 const CACHE_REFRESH_MS = 30000;
+const OBREIRO_NOTIFICATIONS_KEY = "obreiro_notifications";
 
 const ministerialOptions = ["Membro", "Cooperador", "Di\u00e1cono", "Presb\u00edtero", "Pastor"];
 
@@ -61,6 +63,13 @@ type LetterFormState = {
   igreja_destino: string;
   igreja_destino_manual: string;
   dia_pregacao: string;
+};
+
+type ObreiroNotification = {
+  id: string;
+  title: string;
+  body: string;
+  ts: number;
 };
 
 const emptyProfile: ObreiroProfile = {
@@ -178,6 +187,15 @@ export default function Obreiro() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creatingLetter, setCreatingLetter] = useState(false);
   const [letterForm, setLetterForm] = useState<LetterFormState>(emptyLetterForm);
+  const [notifications, setNotifications] = useState<ObreiroNotification[]>(() => {
+    try {
+      const raw = localStorage.getItem(OBREIRO_NOTIFICATIONS_KEY);
+      return raw ? (JSON.parse(raw) as ObreiroNotification[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const previousCardStateRef = useRef<Map<string, string>>(new Map());
 
   const blocked = useMemo(() => isBlockedStatusValue(profile.status), [profile.status]);
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -400,6 +418,70 @@ export default function Obreiro() {
   const handleProfileChange = (field: keyof ObreiroProfile, value: string) => {
     setProfile((prev) => ({ ...prev, [field]: value }));
   };
+
+  const clearNotifications = () => {
+    setNotifications([]);
+    localStorage.setItem(OBREIRO_NOTIFICATIONS_KEY, JSON.stringify([]));
+  };
+
+  useEffect(() => {
+    localStorage.setItem(OBREIRO_NOTIFICATIONS_KEY, JSON.stringify(notifications));
+  }, [notifications]);
+
+  useEffect(() => {
+    if (!cards.length) return;
+
+    const previousMap = previousCardStateRef.current;
+    const nextMap = new Map<string, string>();
+    const nextNotifications: ObreiroNotification[] = [];
+
+    cards.forEach((row) => {
+      const key = String(row.id || row.doc_id || `${row.nome}-${row.data_emissao}`).trim();
+      const status = getCartaStatus(row, profile);
+      const signature = `${status}|${row.doc_id || ""}|${row.pdf_url || row.doc_url || ""}`;
+      nextMap.set(key, signature);
+
+      if (!previousMap.size) return;
+
+      const previousSignature = previousMap.get(key);
+      if (!previousSignature) {
+        nextNotifications.push({
+          id: `${Date.now()}-${key}-nova`,
+          title: "Carta nova",
+          body: `${row.igreja_destino || "Destino"} cadastrada para ${row.nome || "obreiro"}.`,
+          ts: Date.now(),
+        });
+        return;
+      }
+
+      const previousStatus = previousSignature.split("|")[0];
+      if (previousStatus !== status) {
+        const title =
+          status === "Carta liberada"
+            ? "Carta liberada"
+            : status === "Carta enviada"
+              ? "Carta enviada"
+              : status === "Liberacao automatica"
+                ? "Liberacao automatica"
+                : "";
+
+        if (title) {
+          nextNotifications.push({
+            id: `${Date.now()}-${key}-${status}`,
+            title,
+            body: `${row.igreja_destino || "Destino"} agora esta com status ${status}.`,
+            ts: Date.now(),
+          });
+        }
+      }
+    });
+
+    previousCardStateRef.current = nextMap;
+
+    if (nextNotifications.length) {
+      setNotifications((prev) => [...nextNotifications, ...prev].slice(0, 20));
+    }
+  }, [cards, profile]);
 
   const handleSaveProfile = async () => {
     if (!clientId || !phone || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -667,9 +749,36 @@ export default function Obreiro() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" onClick={() => void refreshPage()} className="gap-1" disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Atualizar
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" className="relative h-9 w-9 p-0">
+                  <Bell className="h-4 w-4" />
+                  {notifications.length > 0 && (
+                    <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+                      {notifications.length}
+                    </span>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80">
+                <DropdownMenuLabel>Notificacoes</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {notifications.length === 0 ? (
+                  <DropdownMenuItem className="text-muted-foreground">Sem notificacoes</DropdownMenuItem>
+                ) : (
+                  notifications.slice(0, 8).map((item) => (
+                    <DropdownMenuItem key={item.id} className="flex flex-col items-start gap-1">
+                      <span className="text-xs font-semibold">{item.title}</span>
+                      <span className="text-xs text-muted-foreground">{item.body}</span>
+                    </DropdownMenuItem>
+                  ))
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={clearNotifications} className="text-xs text-rose-700">
+                  Limpar notificacoes
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button type="button" variant="outline" onClick={handleLogout} className="gap-1">
               <LogOut className="h-4 w-4" /> Sair
             </Button>
@@ -754,35 +863,50 @@ export default function Obreiro() {
                 {cards.length === 0 ? (
                   <div className="text-sm text-muted-foreground">Nenhuma carta encontrada para este obreiro.</div>
                 ) : (
-                  cards.map((row, index) => {
-                    const statusLabel = getCartaStatus(row, profile);
-                    const pdfUrl = String(row.url_pdf || row.pdfUrl || row.doc_url || "").trim();
-                    return (
-                      <div key={`${row.doc_id || row.nome || "carta"}-${index}`} className="rounded-lg border bg-card p-4 shadow-sm">
-                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                          <div className="space-y-1 text-sm">
-                            <div className="font-medium text-foreground">{row.igreja_destino || row.ipda_destino || "Destino nao informado"}</div>
-                            <div className="text-muted-foreground">Origem: {row.igreja_origem || "-"}</div>
-                            <div className="text-muted-foreground">Data da pregacao: {formatDisplayDate(row.data_pregacao || row["Data da pregacao."] || "-")}</div>
-                            <div className="text-muted-foreground">Emissao: {formatDisplayDate(row.data_emissao || row["Carimbo de data/hora"] || "-")}</div>
-                          </div>
-                          <div className="flex flex-col items-start gap-2 md:items-end">
-                            <Badge variant="outline" className={getCartaStatusClass(statusLabel)}>
-                              {statusLabel}
-                            </Badge>
-                            <Button
-                              type="button"
-                              className="bg-emerald-600 text-white hover:bg-emerald-700"
-                              onClick={() => pdfUrl && window.open(pdfUrl, "_blank", "noopener,noreferrer")}
-                              disabled={!pdfUrl}
-                            >
-                              Abrir PDF
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
+                  <div className="overflow-x-auto rounded-lg border bg-card shadow-sm">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3">Destino</th>
+                          <th className="px-4 py-3">Origem</th>
+                          <th className="px-4 py-3">Data da pregacao</th>
+                          <th className="px-4 py-3">Emissao</th>
+                          <th className="px-4 py-3">Status</th>
+                          <th className="px-4 py-3 text-right">PDF</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cards.map((row, index) => {
+                          const statusLabel = getCartaStatus(row, profile);
+                          const pdfUrl = String(row.pdf_url || row.url_pdf || row.pdfUrl || row.doc_url || "").trim();
+
+                          return (
+                            <tr key={`${row.id || row.doc_id || row.nome || "carta"}-${index}`} className="border-t">
+                              <td className="px-4 py-3 font-medium text-foreground">{row.igreja_destino || row.ipda_destino || "Destino nao informado"}</td>
+                              <td className="px-4 py-3 text-muted-foreground">{row.igreja_origem || "-"}</td>
+                              <td className="px-4 py-3 text-muted-foreground">{formatDisplayDate(row.data_pregacao || row["Data da pregacao."] || "-")}</td>
+                              <td className="px-4 py-3 text-muted-foreground">{formatDisplayDate(row.data_emissao || row["Carimbo de data/hora"] || "-")}</td>
+                              <td className="px-4 py-3">
+                                <Badge variant="outline" className={getCartaStatusClass(statusLabel)}>
+                                  {statusLabel}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <Button
+                                  type="button"
+                                  className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                  onClick={() => pdfUrl && window.open(pdfUrl, "_blank", "noopener,noreferrer")}
+                                  disabled={!pdfUrl}
+                                >
+                                  Abrir PDF
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </CardContent>
             </Card>
