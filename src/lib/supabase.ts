@@ -30,7 +30,13 @@ const functions = {
       }
       return { data: payload, error: null };
     } catch (err: any) {
-      return { data: null, error: err instanceof Error ? err : new Error(String(err)) };
+      const rawMessage = err instanceof Error ? err.message : String(err);
+      const lowered = rawMessage.toLowerCase();
+      const message =
+        lowered.includes("failed to fetch") || lowered.includes("connection") || lowered.includes("network")
+          ? "Falha de conexao com as Edge Functions do Supabase."
+          : rawMessage;
+      return { data: null, error: new Error(message) };
     }
   },
 };

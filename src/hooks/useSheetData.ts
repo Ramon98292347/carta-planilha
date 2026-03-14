@@ -1,11 +1,11 @@
 ﻿import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-const REFRESH_INTERVAL_MS = 30000;
 const LIST_MEMBERS_FUNCTION_NAME = (import.meta.env.VITE_LIST_MEMBERS_FUNCTION_NAME || "list-members").trim();
 const LIST_LETTERS_FUNCTION_NAME = (import.meta.env.VITE_LIST_LETTERS_FUNCTION_NAME || "list-letters").trim();
 const LIST_CHURCHES_FUNCTION_NAME = (import.meta.env.VITE_LIST_CHURCHES_FUNCTION_NAME || "list-churches-in-scope").trim();
 const LIST_NOTIFICATIONS_FUNCTION_NAME = (import.meta.env.VITE_LIST_NOTIFICATIONS_FUNCTION_NAME || "list-notifications").trim();
+const MARK_NOTIFICATIONS_READ_FUNCTION_NAME = (import.meta.env.VITE_MARK_NOTIFICATIONS_READ_FUNCTION_NAME || "mark-notifications-read").trim();
 
 type NotificationItem = { id: string; title: string; body: string; ts: number };
 type ChurchRow = {
@@ -152,7 +152,7 @@ export function useSheetData() {
           body: { page: 1, page_size: 500 },
         }),
         supabase.functions.invoke<NotificationsResponse>(LIST_NOTIFICATIONS_FUNCTION_NAME, {
-          body: { page: 1, page_size: 50 },
+          body: { page: 1, page_size: 50, unread_only: true },
         }),
       ]);
 
@@ -237,12 +237,13 @@ export function useSheetData() {
         };
       });
 
-      const nextNotifications = notificationsRows.map((row) => ({
-        id: String(row.id || "").trim(),
-        title: String(row.title || "Notificacao").trim() || "Notificacao",
-        body: String(row.message || "").trim(),
-        ts: new Date(String(row.created_at || "")).getTime() || Date.now(),
-      }));
+      const nextNotifications = notificationsRows
+        .map((row) => ({
+          id: String(row.id || "").trim(),
+          title: String(row.title || "Notificacao").trim() || "Notificacao",
+          body: String(row.message || "").trim(),
+          ts: new Date(String(row.created_at || "")).getTime() || Date.now(),
+        }));
 
       setCartas(nextCartas);
       setObreiros(nextObreiros);
@@ -255,11 +256,15 @@ export function useSheetData() {
       setOffline(false);
       setLastSyncAt(Date.now());
     } catch (err) {
-      setCartas([]);
-      setObreiros([]);
-      setChurches([]);
-      setNotifications([]);
-      setError(err instanceof Error ? err.message : "Erro ao carregar painel.");
+      const rawMessage = err instanceof Error ? err.message : "Erro ao carregar painel.";
+      const lowered = rawMessage.toLowerCase();
+      const friendlyMessage =
+        lowered.includes("401") || lowered.includes("unauthorized") || lowered.includes("jwt")
+          ? "Sessao expirada ou invalida. Faça login novamente."
+          : lowered.includes("failed to fetch") || lowered.includes("connection") || lowered.includes("network")
+            ? "Falha de conexao com as functions do Supabase. Verifique se as functions publicadas estao online."
+            : rawMessage;
+      setError(friendlyMessage);
       setOffline(false);
     } finally {
       setLoading(false);
@@ -271,9 +276,13 @@ export function useSheetData() {
   }, [refresh]);
 
   const clearNotifications = useCallback(() => {
-    // Comentario: por enquanto limpamos so o estado local do sino.
-    // Se voce quiser depois, a gente liga isso a uma function de marcar lida.
-    setNotifications([]);
+    void supabase.functions
+      .invoke(MARK_NOTIFICATIONS_READ_FUNCTION_NAME, {
+        body: { church_totvs_id: (localStorage.getItem("totvs_church_id") || "").trim() || null },
+      })
+      .finally(() => {
+        setNotifications([]);
+      });
   }, []);
 
   const disconnect = useCallback(() => {
@@ -292,14 +301,24 @@ export function useSheetData() {
   }, [refresh]);
 
   useEffect(() => {
-    if (!connected) return;
-
-    const intervalId = window.setInterval(() => {
+    const handleFocusRefresh = () => {
       void refresh();
-    }, REFRESH_INTERVAL_MS);
+    };
 
-    return () => window.clearInterval(intervalId);
-  }, [connected, refresh]);
+    const handleVisibilityRefresh = () => {
+      if (document.visibilityState === "visible") {
+        void refresh();
+      }
+    };
+
+    window.addEventListener("focus", handleFocusRefresh);
+    document.addEventListener("visibilitychange", handleVisibilityRefresh);
+
+    return () => {
+      window.removeEventListener("focus", handleFocusRefresh);
+      document.removeEventListener("visibilitychange", handleVisibilityRefresh);
+    };
+  }, [refresh]);
 
   return {
     url,

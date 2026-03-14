@@ -2,7 +2,9 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";
 
-const N8N_WEBHOOK_URL = "https://n8n-n8n.ynlng8.easypanel.host/webhook/cartas-ipda";
+const N8N_WEBHOOK_URL =
+  Deno.env.get("N8N_CARTA_PREGACAO_WEBHOOK_URL") ||
+  "https://n8n-n8n.ynlng8.easypanel.host/webhook/carta-pregacao";
 
 function corsHeaders() {
   return {
