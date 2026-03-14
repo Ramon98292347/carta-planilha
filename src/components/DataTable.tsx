@@ -50,7 +50,7 @@ const getDerivedStatusLabel = (row: Record<string, string>) => {
   if (statusUsuario === "BLOQUEADO") return "Bloqueado";
   if (driveStatus === "CARTA_ENVIADA") return "Carta enviada";
   if (envio === "ENVIADO") return "Carta enviada";
-  if (statusCartaOperacional === "LIBERADA") return "Liberacao automatica";
+  if (statusCartaOperacional === "LIBERADA") return "Liberado automatico";
   if (statusCartaVisual === "LIBERADA") return "Carta liberada";
   return "Aguardando liberacao";
 };
@@ -59,8 +59,7 @@ const getDerivedStatusClass = (label: string) => {
   if (label === "Bloqueado") return "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-50";
   if (label === "Gerada") return "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50";
   if (label === "Aguardando liberacao") return "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-50";
-  if (label === "Liberacao automatica") return "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50";
-  if (label === "Liberacao automatica") return "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50";
+  if (label === "Liberado automatico") return "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50";
   return "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50";
 };
 

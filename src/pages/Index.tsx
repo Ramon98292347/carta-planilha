@@ -134,15 +134,14 @@ const formatDateBr = (value: string) => {
 };
 
 const getDerivedStatusForFilter = (row: Record<string, string>) => {
-  const status = String(row.status || "").trim();
-  if (status) return status;
-
   const statusUsuario = String(row.status_usuario || row["Status Usuario"] || "").trim().toUpperCase();
+  const statusCartaOperacional = String(row.obreiro_auth_status_carta || "").trim().toUpperCase();
   const statusCarta = String(row.status_carta || row["Status Carta"] || "").trim().toUpperCase();
   const envio = String(row.envio || row["Envio"] || "").trim().toUpperCase();
 
   if (statusUsuario === "BLOQUEADO") return "Bloqueado";
   if (envio === "ENVIADO") return "Carta enviada";
+  if (statusCartaOperacional === "LIBERADA") return "Liberado automatico";
   if (statusCarta === "LIBERADA") return "Carta liberada";
   return "Aguardando liberacao";
 };

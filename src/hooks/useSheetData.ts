@@ -177,10 +177,27 @@ export function useSheetData() {
         churchByTotvs.set(String(church.totvs_id || "").trim(), church);
       });
 
+      const memberById = new Map<string, MemberRow>();
+      const memberByPhone = new Map<string, MemberRow>();
+      members.forEach((member) => {
+        const memberId = String(member.id || "").trim();
+        if (memberId) memberById.set(memberId, member);
+
+        const memberPhone = String(member.phone || "").replace(/\D/g, "");
+        if (memberPhone && !memberByPhone.has(memberPhone)) {
+          memberByPhone.set(memberPhone, member);
+        }
+      });
+
       const nextCartas = letters.map((row) => {
         const rawStatus = String(row.status || "").trim().toUpperCase();
         const phone = String(row.preacher_phone || row.phone || "").trim();
         const churchMeta = churchByTotvs.get(String(row.church_totvs_id || "").trim());
+        const linkedMember =
+          memberById.get(String(row.preacher_user_id || "").trim()) ||
+          memberByPhone.get(String(phone || "").replace(/\D/g, "")) ||
+          null;
+        const autoReleaseEnabled = Boolean(linkedMember?.can_create_released_letter);
 
         return {
           id: String(row.id || "").trim(),
@@ -200,6 +217,7 @@ export function useSheetData() {
           funcao: String(row.minister_role || "-").trim() || "-",
           regiao: String(churchMeta?.class || "-").trim() || "-",
           status: mapLetterStatus(rawStatus),
+          obreiro_auth_status_carta: autoReleaseEnabled ? "LIBERADA" : "GERADA",
           status_carta: rawStatus === "LIBERADA" || rawStatus === "ENVIADA" ? "LIBERADA" : rawStatus === "BLOQUEADO" ? "GERADA" : "GERADA",
           status_usuario: rawStatus === "BLOQUEADO" ? "BLOQUEADO" : "",
           envio: rawStatus === "ENVIADA" ? "ENVIADO" : "",
@@ -215,6 +233,7 @@ export function useSheetData() {
 
       const nextObreiros = members.map((row) => {
         const church = churchByTotvs.get(String(row.default_totvs_id || "").trim());
+        const autoReleaseEnabled = Boolean(row.can_create_released_letter);
         return {
           id: String(row.id || "").trim(),
           cpf: String(row.cpf || "").trim(),
@@ -224,8 +243,9 @@ export function useSheetData() {
           campo: String(church?.class || "-").trim() || "-",
           status: row.is_active ? "AUTORIZADO" : "BLOQUEADO",
           status_usuario: row.is_active ? "" : "BLOQUEADO",
-          status_carta: row.can_create_released_letter ? "LIBERADA" : "GERADA",
-          can_create_released_letter: row.can_create_released_letter ? "1" : "0",
+          status_carta: autoReleaseEnabled ? "LIBERADA" : "GERADA",
+          obreiro_auth_status_carta: autoReleaseEnabled ? "LIBERADA" : "GERADA",
+          can_create_released_letter: autoReleaseEnabled ? "1" : "0",
           data_ordenacao: formatDateBr(row.ordination_date),
           data_batismo: formatDateBr(row.baptism_date),
           telefone: String(row.phone || "-").trim() || "-",
@@ -298,26 +318,6 @@ export function useSheetData() {
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    const handleFocusRefresh = () => {
-      void refresh();
-    };
-
-    const handleVisibilityRefresh = () => {
-      if (document.visibilityState === "visible") {
-        void refresh();
-      }
-    };
-
-    window.addEventListener("focus", handleFocusRefresh);
-    document.addEventListener("visibilitychange", handleVisibilityRefresh);
-
-    return () => {
-      window.removeEventListener("focus", handleFocusRefresh);
-      document.removeEventListener("visibilitychange", handleVisibilityRefresh);
-    };
   }, [refresh]);
 
   return {

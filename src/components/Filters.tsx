@@ -43,7 +43,7 @@ interface Props {
 export function Filters({ filters, onChange, data, igrejaKey, campoKey, cargoKey, statusKey }: Props) {
   const statusOptions = [
     "Aguardando liberacao",
-    "Liberacao automatica",
+    "Liberado automatico",
     "Carta liberada",
     "Carta enviada",
     "Bloqueado",

@@ -17,22 +17,22 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.save-my-profile]
-verify_jwt = true
+verify_jwt = false
 
 [functions.save-user]
-verify_jwt = true
+verify_jwt = false
 
 [functions.save-church]
-verify_jwt = true
+verify_jwt = false
 
 [functions.create-letter]
-verify_jwt = true
+verify_jwt = false
 
 [functions.manage-letter]
-verify_jwt = true
+verify_jwt = false
 
 [functions.mark-notifications-read]
-verify_jwt = true
+verify_jwt = false
 
 [functions.sync-obreiros-from-cards]
 verify_jwt = false

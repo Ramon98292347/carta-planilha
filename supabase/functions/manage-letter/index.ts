@@ -226,9 +226,21 @@ Deno.serve(async (req) => {
     }
 
     if (action === "delete") {
-      patch = {
-        status: "EXCLUIDA",
-      };
+      const { error: delErr } = await sb
+        .from("letters")
+        .delete()
+        .eq("id", letterId);
+
+      if (delErr) return json({ ok: false, error: "db_error_delete_letter", details: delErr.message }, 500);
+
+      return json({
+        ok: true,
+        letter: {
+          id: letterId,
+          status: "EXCLUIDA",
+          deleted: true,
+        },
+      }, 200);
     }
 
     const { data: updated, error: updErr } = await sb
