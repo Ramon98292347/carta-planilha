@@ -10,16 +10,16 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { getSupabaseRestHeaders } from "@/lib/supabaseHeaders";
 import { clearAppSession, getAppToken } from "@/lib/appSession";
+import { formatCep, lookupCep, onlyDigits } from "@/lib/cep";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
-const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
 const CREATE_LETTER_FUNCTION_NAME = (import.meta.env.VITE_CREATE_LETTER_FUNCTION_NAME || "create-letter").trim();
 const OPEN_LETTER_FUNCTION_NAME = (import.meta.env.VITE_OPEN_LETTER_FUNCTION_NAME || "letter").trim();
-const CACHE_REFRESH_MS = 30000;
+const LIST_LETTERS_FUNCTION_NAME = (import.meta.env.VITE_LIST_LETTERS_FUNCTION_NAME || "list-letters").trim();
+const LIST_NOTIFICATIONS_FUNCTION_NAME = (import.meta.env.VITE_LIST_NOTIFICATIONS_FUNCTION_NAME || "list-notifications").trim();
+const MARK_NOTIFICATIONS_READ_FUNCTION_NAME = (import.meta.env.VITE_MARK_NOTIFICATIONS_READ_FUNCTION_NAME || "mark-notifications-read").trim();
 const ministerialOptions = ["Membro", "Cooperador", "Di\u00e1cono", "Presb\u00edtero", "Pastor"];
 
 type ObreiroProfile = {
@@ -108,7 +108,7 @@ const emptyLetterForm: LetterFormState = {
   dia_pregacao: "",
 };
 
-const normalizePhone = (value: string) => (value || "").replace(/\D/g, "");
+const normalizePhone = onlyDigits;
 const isBlockedStatusValue = (value: string) => String(value || "").trim().toUpperCase() === "BLOQUEADO";
 
 const formatDisplayDate = (value: string) => {
@@ -161,6 +161,44 @@ const getCartaStatusClass = (label: string) => {
   return "border-emerald-200 bg-emerald-50 text-emerald-700";
 };
 
+const readProfileFromStorage = (): ObreiroProfile => ({
+  ...emptyProfile,
+  id: (localStorage.getItem("user_id") || "").trim(),
+  nome: (localStorage.getItem("obreiro_nome") || localStorage.getItem("user_name") || "").trim(),
+  telefone: normalizePhone(localStorage.getItem("obreiro_telefone") || ""),
+  email: (localStorage.getItem("obreiro_email") || "").trim(),
+  status: (localStorage.getItem("obreiro_status") || "AUTORIZADO").trim(),
+  status_carta: (localStorage.getItem("obreiro_status_carta") || "GERADA").trim(),
+  data_nascimento: (localStorage.getItem("obreiro_data_nascimento") || "").trim(),
+  data_ordenacao: (localStorage.getItem("obreiro_data_ordenacao") || "").trim(),
+  cargo_ministerial: (localStorage.getItem("obreiro_cargo_ministerial") || "").trim(),
+  cep: (localStorage.getItem("obreiro_cep") || "").trim(),
+  endereco: (localStorage.getItem("obreiro_endereco") || "").trim(),
+  numero: (localStorage.getItem("obreiro_numero") || "").trim(),
+  complemento: (localStorage.getItem("obreiro_complemento") || "").trim(),
+  bairro: (localStorage.getItem("obreiro_bairro") || "").trim(),
+  cidade: (localStorage.getItem("obreiro_cidade") || "").trim(),
+  uf: (localStorage.getItem("obreiro_uf") || "").trim(),
+});
+
+const writeProfileToStorage = (profile: ObreiroProfile) => {
+  localStorage.setItem("obreiro_nome", profile.nome || "");
+  localStorage.setItem("obreiro_telefone", profile.telefone || "");
+  localStorage.setItem("obreiro_status", profile.status || "");
+  localStorage.setItem("obreiro_status_carta", profile.status_carta || "");
+  localStorage.setItem("obreiro_email", profile.email || "");
+  localStorage.setItem("obreiro_data_nascimento", profile.data_nascimento || "");
+  localStorage.setItem("obreiro_data_ordenacao", profile.data_ordenacao || "");
+  localStorage.setItem("obreiro_cargo_ministerial", profile.cargo_ministerial || "");
+  localStorage.setItem("obreiro_cep", profile.cep || "");
+  localStorage.setItem("obreiro_endereco", profile.endereco || "");
+  localStorage.setItem("obreiro_numero", profile.numero || "");
+  localStorage.setItem("obreiro_complemento", profile.complemento || "");
+  localStorage.setItem("obreiro_bairro", profile.bairro || "");
+  localStorage.setItem("obreiro_cidade", profile.cidade || "");
+  localStorage.setItem("obreiro_uf", profile.uf || "");
+};
+
 export default function Obreiro() {
   const navigate = useNavigate();
   const userId = (localStorage.getItem("user_id") || "").trim();
@@ -170,23 +208,7 @@ export default function Obreiro() {
   const originTotvs = (localStorage.getItem("totvs_church_id") || "").trim();
   const authToken = getAppToken();
 
-  const [profile, setProfile] = useState<ObreiroProfile>(() => ({
-    ...emptyProfile,
-    nome: (localStorage.getItem("obreiro_nome") || "").trim(),
-    telefone: phone,
-    email: (localStorage.getItem("obreiro_email") || "").trim(),
-    status: (localStorage.getItem("obreiro_status") || "").trim(),
-    data_nascimento: (localStorage.getItem("obreiro_data_nascimento") || "").trim(),
-    data_ordenacao: (localStorage.getItem("obreiro_data_ordenacao") || "").trim(),
-    cargo_ministerial: (localStorage.getItem("obreiro_cargo_ministerial") || "").trim(),
-    cep: (localStorage.getItem("obreiro_cep") || "").trim(),
-    endereco: (localStorage.getItem("obreiro_endereco") || "").trim(),
-    numero: (localStorage.getItem("obreiro_numero") || "").trim(),
-    complemento: (localStorage.getItem("obreiro_complemento") || "").trim(),
-    bairro: (localStorage.getItem("obreiro_bairro") || "").trim(),
-    cidade: (localStorage.getItem("obreiro_cidade") || "").trim(),
-    uf: (localStorage.getItem("obreiro_uf") || "").trim(),
-  }));
+  const [profile, setProfile] = useState<ObreiroProfile>(() => readProfileFromStorage());
   const [cards, setCards] = useState<CartaRow[]>([]);
   const [destinationOptions, setDestinationOptions] = useState<DestinationOption[]>([]);
   const [clientConfig, setClientConfig] = useState<ClientConfig>(() => ({
@@ -208,6 +230,7 @@ export default function Obreiro() {
   const [cardsDateStart, setCardsDateStart] = useState("");
   const [cardsDateEnd, setCardsDateEnd] = useState("");
   const [notifications, setNotifications] = useState<ObreiroNotification[]>([]);
+  const [lookingUpCep, setLookingUpCep] = useState(false);
 
   const blocked = useMemo(() => isBlockedStatusValue(profile.status), [profile.status]);
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -218,90 +241,19 @@ export default function Obreiro() {
   }, []);
 
   const loadProfile = async () => {
-    if (!userId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-
-    const params = new URLSearchParams({
-      select:
-        "id,full_name,phone,email,is_active,can_create_released_letter,birth_date,ordination_date,minister_role,cep,address_street,address_number,address_complement,address_neighborhood,address_city,address_state",
-      limit: "1",
-    });
-    params.set("id", `eq.${userId}`);
-
-    // Comentario: a leitura via REST agora usa o `rls_token`.
-    // Assim o banco aplica as policies novas por role/escopo.
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/users?${params.toString()}`, {
-      headers: getSupabaseRestHeaders({ json: false }),
-    });
-    if (!response.ok) return;
-
-    const payload = (await response.json().catch(() => [])) as Array<Record<string, string | null>>;
-    const row = payload?.[0];
-    if (!row) return;
-
-    const nextProfile: ObreiroProfile = {
-      id: String(row.id || "").trim(),
-      nome: String(row.full_name || "").trim(),
-      telefone: normalizePhone(String(row.phone || "")),
-      email: String(row.email || "").trim(),
-      status: row.is_active === false ? "BLOQUEADO" : "AUTORIZADO",
-      status_carta: row.can_create_released_letter === true ? "LIBERADA" : "GERADA",
-      data_nascimento: String(row.birth_date || "").trim(),
-      data_ordenacao: String(row.ordination_date || "").trim(),
-      cargo_ministerial: String(row.minister_role || "").trim(),
-      cep: String(row.cep || "").trim(),
-      endereco: String(row.address_street || "").trim(),
-      numero: String(row.address_number || "").trim(),
-      complemento: String(row.address_complement || "").trim(),
-      bairro: String(row.address_neighborhood || "").trim(),
-      cidade: String(row.address_city || "").trim(),
-      uf: String(row.address_state || "").trim(),
-    };
-
-    setProfile(nextProfile);
-    localStorage.setItem("obreiro_nome", nextProfile.nome || "");
-    localStorage.setItem("obreiro_telefone", nextProfile.telefone || "");
-    localStorage.setItem("obreiro_status", nextProfile.status || "");
-    localStorage.setItem("obreiro_email", nextProfile.email || "");
-    localStorage.setItem("obreiro_data_nascimento", nextProfile.data_nascimento || "");
-    localStorage.setItem("obreiro_data_ordenacao", nextProfile.data_ordenacao || "");
-    localStorage.setItem("obreiro_cargo_ministerial", nextProfile.cargo_ministerial || "");
-    localStorage.setItem("obreiro_cep", nextProfile.cep || "");
-    localStorage.setItem("obreiro_endereco", nextProfile.endereco || "");
-    localStorage.setItem("obreiro_numero", nextProfile.numero || "");
-    localStorage.setItem("obreiro_complemento", nextProfile.complemento || "");
-    localStorage.setItem("obreiro_bairro", nextProfile.bairro || "");
-    localStorage.setItem("obreiro_cidade", nextProfile.cidade || "");
-    localStorage.setItem("obreiro_uf", nextProfile.uf || "");
+    if (!userId) return;
+    setProfile(readProfileFromStorage());
   };
 
   const loadClientConfig = async () => {
-    if (!originTotvs || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-
-    const params = new URLSearchParams({
-      select: "totvs_id,church_name,class,stamp_church_url",
-      limit: "1",
-    });
-    params.set("totvs_id", `eq.${originTotvs}`);
-
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/churches?${params.toString()}`, {
-      headers: getSupabaseRestHeaders({ json: false }),
-    });
-    if (!response.ok) return;
-
-    const payload = (await response.json().catch(() => [])) as Array<Record<string, string | null>>;
-    const row = payload?.[0];
-    if (!row) return;
-
     const nextConfig: ClientConfig = {
-      church_name: String(row.church_name || churchName || "").trim(),
-      // Comentario: o obreiro nao tem mais leitura livre do cadastro do pastor.
-      // O backend resolve o assinante final da carta pela hierarquia.
+      church_name: churchName || "",
       pastor_name: pastorName || "Resolvido pela hierarquia",
-      pastor_phone: "",
-      assinatura_url: "",
-      carimbo_igreja_url: String(row.stamp_church_url || "").trim(),
-      carimbo_pastor_url: "",
-      church_class: String(row.class || "").trim(),
+      pastor_phone: (localStorage.getItem("pastor_phone") || "").trim(),
+      assinatura_url: (localStorage.getItem("assinatura_url") || "").trim(),
+      carimbo_igreja_url: (localStorage.getItem("carimbo_igreja_url") || "").trim(),
+      carimbo_pastor_url: (localStorage.getItem("carimbo_pastor_url") || "").trim(),
+      church_class: (localStorage.getItem("church_class") || "").trim(),
     };
 
     setClientConfig(nextConfig);
@@ -320,22 +272,15 @@ export default function Obreiro() {
   };
 
   const loadCards = async () => {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-
-    const params = new URLSearchParams({
-      select:
-        "id,doc_id,pdf_url,url_carta,preacher_name,preacher_phone,email,minister_role,church_origin,church_destination,preach_date,created_at,status,flow_type",
-      limit: "100",
-      order: "created_at.desc",
+    const { data, error } = await supabase.functions.invoke<{
+      ok?: boolean;
+      letters?: Array<Record<string, string | null>>;
+    }>(LIST_LETTERS_FUNCTION_NAME, {
+      body: { page: 1, page_size: 100 },
     });
+    if (error || !data?.letters) return;
 
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/letters?${params.toString()}`, {
-      headers: getSupabaseRestHeaders({ json: false }),
-    });
-    if (!response.ok) return;
-
-    const payload = (await response.json().catch(() => [])) as Array<Record<string, string | null>>;
-      const rows = payload.map((row) => ({
+    const rows = data.letters.map((row) => ({
       id: String(row.id || "").trim(),
       doc_id: String(row.doc_id || "").trim(),
       doc_url: String(row.url_carta || "").trim(),
@@ -360,21 +305,15 @@ export default function Obreiro() {
   };
 
   const loadNotifications = async () => {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-
-    const params = new URLSearchParams({
-      select: "id,title,message,created_at",
-      order: "created_at.desc",
-      limit: "20",
+    const { data, error } = await supabase.functions.invoke<{
+      ok?: boolean;
+      notifications?: Array<Record<string, string | null>>;
+    }>(LIST_NOTIFICATIONS_FUNCTION_NAME, {
+      body: { page: 1, page_size: 20, unread_only: true },
     });
+    if (error || !data?.notifications) return;
 
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/notifications?${params.toString()}`, {
-      headers: getSupabaseRestHeaders({ json: false }),
-    });
-    if (!response.ok) return;
-
-    const payload = (await response.json().catch(() => [])) as Array<Record<string, string | null>>;
-    const nextNotifications = payload.map((row) => ({
+    const nextNotifications = data.notifications.map((row) => ({
       id: String(row.id || "").trim(),
       title: String(row.title || "Notificacao").trim(),
       body: String(row.message || "").trim(),
@@ -395,14 +334,6 @@ export default function Obreiro() {
   useEffect(() => {
     void refreshPage();
   }, [userId, originTotvs]);
-
-  useEffect(() => {
-    if (!userId) return;
-    const id = window.setInterval(() => {
-      void Promise.all([loadProfile(), loadClientConfig(), loadDestinationOptions(), loadCards(), loadNotifications()]);
-    }, CACHE_REFRESH_MS);
-    return () => window.clearInterval(id);
-  }, [userId, originTotvs, profile.status_carta]);
 
   const selectedDestination = useMemo(() => {
     const typed = String(letterForm.igreja_destino || "").trim().toUpperCase();
@@ -450,16 +381,74 @@ export default function Obreiro() {
   }, [cards, cardsPeriodPreset, cardsStatusFilter, cardsDateStart, cardsDateEnd, profile]);
 
   const handleProfileChange = (field: keyof ObreiroProfile, value: string) => {
-    setProfile((prev) => ({ ...prev, [field]: value }));
+    setProfile((prev) => ({
+      ...prev,
+      [field]:
+        field === "telefone"
+          ? normalizePhone(value)
+          : field === "cep"
+            ? formatCep(value)
+            : value,
+    }));
   };
 
+  const handleCepLookup = async (rawCep: string) => {
+    const cep = onlyDigits(rawCep);
+    if (cep.length !== 8) return;
+
+    setLookingUpCep(true);
+    try {
+      const result = await lookupCep(cep);
+      if (!result) {
+        toast.error("CEP nao encontrado.");
+        return;
+      }
+
+      setProfile((prev) => ({
+        ...prev,
+        cep: result.cep || prev.cep,
+        endereco: result.street || prev.endereco,
+        bairro: result.neighborhood || prev.bairro,
+        cidade: result.city || prev.cidade,
+        uf: result.state || prev.uf,
+      }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Nao foi possivel consultar o CEP.");
+    } finally {
+      setLookingUpCep(false);
+    }
+  };
+
+  useEffect(() => {
+    const cep = onlyDigits(profile.cep);
+    if (cep.length === 8) {
+      void handleCepLookup(cep);
+    }
+  }, [profile.cep]);
+
   const clearNotifications = () => {
-    setNotifications([]);
+    void supabase.functions
+      .invoke(MARK_NOTIFICATIONS_READ_FUNCTION_NAME, {
+        body: { church_totvs_id: originTotvs || null },
+      })
+      .finally(() => {
+        setNotifications([]);
+      });
   };
 
   const handleSaveProfile = async () => {
     if (!authToken) {
       toast.error("Sessao do obreiro nao encontrada.");
+      return;
+    }
+
+    if (!profile.nome.trim()) {
+      toast.error("Preencha o nome.");
+      return;
+    }
+
+    if (!profile.telefone.trim()) {
+      toast.error("Preencha o telefone antes de salvar.");
       return;
     }
 
@@ -487,6 +476,8 @@ export default function Obreiro() {
       });
       if (error || !data?.ok) throw new Error(data?.error || error?.message || "Nao foi possivel atualizar o cadastro.");
 
+      const nextProfile = { ...profile };
+      writeProfileToStorage(nextProfile);
       toast.success("Cadastro atualizado com sucesso.");
       await loadProfile();
     } catch (err: any) {
@@ -567,6 +558,17 @@ export default function Obreiro() {
   };
 
   const handleOpenLetter = async (row: CartaRow) => {
+    const statusLabel = getCartaStatus(row, profile);
+    const canOpenPdf =
+      statusLabel === "Carta liberada" ||
+      statusLabel === "Liberacao automatica" ||
+      statusLabel === "Carta enviada";
+
+    if (!canOpenPdf) {
+      toast.error("O PDF so pode ser aberto quando a carta estiver liberada.");
+      return;
+    }
+
     const directUrl = String(row.pdf_url || row.doc_url || "").trim();
     if (directUrl) {
       window.open(directUrl, "_blank", "noopener,noreferrer");
@@ -773,6 +775,10 @@ export default function Obreiro() {
                       <tbody>
                         {filteredCards.map((row, index) => {
                           const statusLabel = getCartaStatus(row, profile);
+                          const canOpenPdf =
+                            statusLabel === "Carta liberada" ||
+                            statusLabel === "Liberacao automatica" ||
+                            statusLabel === "Carta enviada";
                           return (
                             <tr key={`${row.id || row.doc_id || row.nome || "carta"}-${index}`} className="border-t">
                               <td className="px-4 py-3 font-medium text-foreground">{row.igreja_destino || row.ipda_destino || "Destino nao informado"}</td>
@@ -787,7 +793,8 @@ export default function Obreiro() {
                               <td className="px-4 py-3 text-right">
                                 <Button
                                   type="button"
-                                  className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                  disabled={!canOpenPdf}
+                                  className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-slate-300 disabled:text-slate-500"
                                   onClick={() => void handleOpenLetter(row)}
                                 >
                                   Abrir PDF
@@ -817,7 +824,7 @@ export default function Obreiro() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="telefone">Telefone</Label>
-                  <Input id="telefone" value={profile.telefone} disabled />
+                  <Input id="telefone" value={profile.telefone} onChange={(e) => handleProfileChange("telefone", e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
@@ -846,7 +853,13 @@ export default function Obreiro() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="cep">CEP</Label>
-                  <Input id="cep" value={profile.cep} onChange={(e) => handleProfileChange("cep", e.target.value)} />
+                  <Input
+                    id="cep"
+                    value={profile.cep}
+                    onChange={(e) => handleProfileChange("cep", e.target.value)}
+                    placeholder="00000-000"
+                  />
+                  {lookingUpCep && <p className="text-xs text-muted-foreground">Buscando endereco pelo CEP...</p>}
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="endereco">Endereco</Label>
