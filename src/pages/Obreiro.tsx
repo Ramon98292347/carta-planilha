@@ -467,6 +467,76 @@ export default function Obreiro() {
     status_carta: profile.status_carta || "GERADA",
   });
 
+  const createLetterRecord = async (payload: ReturnType<typeof buildLetterPayload>) => {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/client_letters`, {
+      method: "POST",
+      headers: {
+        ...getSupabaseHeaders(),
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        client_id: payload.client_id,
+        obreiro_id: payload.obreiro_id || null,
+        nome: payload.nome,
+        telefone: payload.telefone,
+        email: payload.email || null,
+        email_pregador: payload.email_pregador || null,
+        ministerial: payload.ministerial || null,
+        igreja_origem: payload.igreja_origem || null,
+        origem: payload.origem || null,
+        origem_totvs: payload.origem_totvs || null,
+        origem_nome: payload.origem_nome || null,
+        igreja_destino: payload.igreja_destino || null,
+        destino: payload.destino || null,
+        destino_totvs: payload.destino_totvs || null,
+        destino_nome: payload.destino_nome || null,
+        dia_pregacao: payload.dia_pregacao || null,
+        data_emissao: payload.data_emissao || null,
+        data_separacao: payload.data_separacao || null,
+        data_da_separacao: payload.data_da_separacao || null,
+        pastor_responsavel: payload.pastor_responsavel || null,
+        telefone_pastor: payload.telefone_pastor || null,
+        assinatura_url: payload.assinatura_url || null,
+        carimbo_igreja_url: payload.carimbo_igreja_url || null,
+        carimbo_pastor_url: payload.carimbo_pastor_url || null,
+        status_usuario: payload.status_usuario || "AUTORIZADO",
+        status_carta: payload.status_carta || "GERADA",
+        tipo_fluxo: String(profile.status_carta || "").trim().toUpperCase() === "LIBERADA" ? "automatico" : "manual",
+        webhook_action: "carta-pregacao",
+        raw_payload: payload,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Nao foi possivel salvar a carta no banco.");
+    }
+
+    const rows = (await response.json().catch(() => [])) as Array<{ id?: string }>;
+    return String(rows?.[0]?.id || "").trim() || null;
+  };
+
+  const updateLetterRecord = async (letterId: string, data: Record<string, unknown>) => {
+    if (!letterId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+
+    const params = new URLSearchParams({ select: "id" });
+    params.set("id", `eq.${letterId}`);
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/client_letters?${params.toString()}`, {
+      method: "PATCH",
+      headers: {
+        ...getSupabaseHeaders(),
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      throw new Error("Nao foi possivel atualizar a carta no banco.");
+    }
+  };
+
   const handleCreateLetter = async () => {
     const igrejaDestinoFinal = (letterForm.igreja_destino || letterForm.igreja_destino_manual).trim();
     if (!(letterForm.ministerial || profile.cargo_ministerial) || !igrejaDestinoFinal || !letterForm.dia_pregacao) {
@@ -487,6 +557,8 @@ export default function Obreiro() {
 
     setCreatingLetter(true);
     try {
+      const letterId = await createLetterRecord(payload);
+
       const response = await fetch(LETTER_CREATE_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -498,8 +570,17 @@ export default function Obreiro() {
         throw new Error(String(result?.error || result?.message || "Nao foi possivel enviar a carta.").trim());
       }
 
+      if (letterId) {
+        await updateLetterRecord(letterId, {
+          doc_id: String(result?.docId || result?.doc_id || "").trim() || null,
+          doc_url: String(result?.docUrl || result?.doc_url || "").trim() || null,
+          pdf_url: String(result?.pdfUrl || result?.pdf_url || "").trim() || null,
+        });
+      }
+
       toast.success(String(result?.message || "Carta enviada para processamento.").trim());
       setCreateOpen(false);
+      await loadCards();
     } catch (err: any) {
       toast.error(err?.message || "Nao foi possivel enviar a carta.");
     } finally {
