@@ -19,6 +19,9 @@ verify_jwt = false
 [functions.search-churches-public]
 verify_jwt = false
 
+[functions.list-churches-in-scope]
+verify_jwt = false
+
 [functions.save-my-profile]
 verify_jwt = false
 

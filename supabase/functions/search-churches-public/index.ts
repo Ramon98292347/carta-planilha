@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     const query = onlyDigits(body.query || "");
     const limit = Math.max(1, Math.min(10, Number(body.limit || 5)));
 
-    if (query.length < 3) {
+    if (query.length < 2) {
       return json({ ok: true, churches: [] }, 200);
     }
 

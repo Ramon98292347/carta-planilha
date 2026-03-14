@@ -520,7 +520,7 @@ Deno.serve(async (req) => {
       destino_nome: parseChurchNameFromText(created.church_destination || ""),
       email: preacher_email || "",
       ministerial: created.minister_role || "",
-      data_separacao: preacher_ordination_date || "",
+      data_separacao: formatDateBrShort(preacher_ordination_date || ""),
       pastor_responsavel: String((pastorUser as Record<string, unknown>).full_name || ""),
       telefone_pastor: String((pastorUser as Record<string, unknown>).phone || ""),
       assinatura_url: String((pastorUser as Record<string, unknown>).signature_url || ""),

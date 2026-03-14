@@ -1,12 +1,13 @@
 ﻿import { parseDate } from "@/lib/sheets";
-import { FileText, Users, CalendarDays, TrendingUp } from "lucide-react";
+import { Building2, CalendarDays, FileText, TrendingUp, Users } from "lucide-react";
 
 interface Props {
   cartas: Record<string, string>[];
   obreiros: Record<string, string>[];
+  churches: Record<string, string>[];
 }
 
-export function MetricCards({ cartas, obreiros }: Props) {
+export function MetricCards({ cartas, obreiros, churches }: Props) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -39,6 +40,7 @@ export function MetricCards({ cartas, obreiros }: Props) {
     { label: "Cartas Hoje", value: cartasHoje, icon: CalendarDays, cls: "metric-card-2" },
     { label: "Últimos 7 dias", value: cartas7d, icon: TrendingUp, cls: "metric-card-3" },
     { label: "Total de Obreiros", value: obreiros.length, icon: Users, cls: "metric-card-4" },
+    { label: "Total de igrejas", value: churches.length, icon: Building2, cls: "metric-card-1" },
   ];
 
   return (

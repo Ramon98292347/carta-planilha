@@ -20,6 +20,7 @@ const OPEN_LETTER_FUNCTION_NAME = (import.meta.env.VITE_OPEN_LETTER_FUNCTION_NAM
 const LIST_LETTERS_FUNCTION_NAME = (import.meta.env.VITE_LIST_LETTERS_FUNCTION_NAME || "list-letters").trim();
 const LIST_NOTIFICATIONS_FUNCTION_NAME = (import.meta.env.VITE_LIST_NOTIFICATIONS_FUNCTION_NAME || "list-notifications").trim();
 const MARK_NOTIFICATIONS_READ_FUNCTION_NAME = (import.meta.env.VITE_MARK_NOTIFICATIONS_READ_FUNCTION_NAME || "mark-notifications-read").trim();
+const SEARCH_CHURCHES_PUBLIC_FUNCTION_NAME = (import.meta.env.VITE_SEARCH_CHURCHES_PUBLIC_FUNCTION_NAME || "search-churches-public").trim();
 const ministerialOptions = ["Membro", "Cooperador", "Di\u00e1cono", "Presb\u00edtero", "Pastor"];
 
 type ObreiroProfile = {
@@ -171,7 +172,7 @@ const readProfileFromStorage = (): ObreiroProfile => ({
   status_carta: (localStorage.getItem("obreiro_status_carta") || "GERADA").trim(),
   data_nascimento: (localStorage.getItem("obreiro_data_nascimento") || "").trim(),
   data_ordenacao: (localStorage.getItem("obreiro_data_ordenacao") || "").trim(),
-  cargo_ministerial: (localStorage.getItem("obreiro_cargo_ministerial") || "").trim(),
+  cargo_ministerial: (localStorage.getItem("obreiro_cargo_ministerial") || localStorage.getItem("minister_role") || "").trim(),
   cep: (localStorage.getItem("obreiro_cep") || "").trim(),
   endereco: (localStorage.getItem("obreiro_endereco") || "").trim(),
   numero: (localStorage.getItem("obreiro_numero") || "").trim(),
@@ -179,6 +180,26 @@ const readProfileFromStorage = (): ObreiroProfile => ({
   bairro: (localStorage.getItem("obreiro_bairro") || "").trim(),
   cidade: (localStorage.getItem("obreiro_cidade") || "").trim(),
   uf: (localStorage.getItem("obreiro_uf") || "").trim(),
+});
+
+const mapSavedProfileToObreiroProfile = (input: Record<string, unknown>, fallback: ObreiroProfile): ObreiroProfile => ({
+  ...fallback,
+  id: String(input.id || fallback.id || "").trim(),
+  nome: String(input.full_name || fallback.nome || "").trim(),
+  telefone: normalizePhone(String(input.phone || fallback.telefone || "")),
+  email: String(input.email || fallback.email || "").trim(),
+  status: Boolean(input.is_active ?? true) ? "AUTORIZADO" : "BLOQUEADO",
+  status_carta: Boolean(input.can_create_released_letter) ? "LIBERADA" : (fallback.status_carta || "GERADA"),
+  data_nascimento: String(input.birth_date || fallback.data_nascimento || "").trim(),
+  data_ordenacao: String(input.ordination_date || fallback.data_ordenacao || "").trim(),
+  cargo_ministerial: String(input.minister_role || fallback.cargo_ministerial || "").trim(),
+  cep: String(input.cep || fallback.cep || "").trim(),
+  endereco: String(input.address_street || fallback.endereco || "").trim(),
+  numero: String(input.address_number || fallback.numero || "").trim(),
+  complemento: String(input.address_complement || fallback.complemento || "").trim(),
+  bairro: String(input.address_neighborhood || fallback.bairro || "").trim(),
+  cidade: String(input.address_city || fallback.cidade || "").trim(),
+  uf: String(input.address_state || fallback.uf || "").trim(),
 });
 
 const writeProfileToStorage = (profile: ObreiroProfile) => {
@@ -231,6 +252,7 @@ export default function Obreiro() {
   const [cardsDateEnd, setCardsDateEnd] = useState("");
   const [notifications, setNotifications] = useState<ObreiroNotification[]>([]);
   const [lookingUpCep, setLookingUpCep] = useState(false);
+  const [searchingDestinations, setSearchingDestinations] = useState(false);
 
   const blocked = useMemo(() => isBlockedStatusValue(profile.status), [profile.status]);
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -266,8 +288,6 @@ export default function Obreiro() {
   };
 
   const loadDestinationOptions = async () => {
-    // Comentario: com as RLS novas, o obreiro nao enxerga o escopo inteiro de igrejas.
-    // A validacao final de destino passa a acontecer na function de criar carta.
     setDestinationOptions([]);
   };
 
@@ -345,6 +365,13 @@ export default function Obreiro() {
       null
     );
   }, [destinationOptions, letterForm.igreja_destino]);
+  const filteredDestinationOptions = useMemo(() => {
+    const term = String(letterForm.igreja_destino || "").trim().toLowerCase();
+    if (term.length < 2 || letterForm.igreja_destino_manual.trim()) return [];
+    return destinationOptions
+      .filter((item) => `${item.totvs_church_id} - ${item.church_name}`.toLowerCase().includes(term))
+      .slice(0, 12);
+  }, [destinationOptions, letterForm.igreja_destino, letterForm.igreja_destino_manual]);
 
   const stats = useMemo(() => {
     const labels = cards.map((row) => getCartaStatus(row, profile));
@@ -426,6 +453,43 @@ export default function Obreiro() {
     }
   }, [profile.cep]);
 
+  useEffect(() => {
+    const query = onlyDigits(letterForm.igreja_destino);
+    if (query.length < 2 || letterForm.igreja_destino_manual.trim() || !createOpen) {
+      setDestinationOptions([]);
+      setSearchingDestinations(false);
+      return;
+    }
+
+    const timer = window.setTimeout(async () => {
+      setSearchingDestinations(true);
+      try {
+        const { data, error } = await supabase.functions.invoke<{
+          ok?: boolean;
+          churches?: Array<{ totvs_id: string; church_name: string }>;
+        }>(SEARCH_CHURCHES_PUBLIC_FUNCTION_NAME, {
+          body: { query, limit: 12 },
+        });
+
+        if (error || !data?.ok) {
+          setDestinationOptions([]);
+          return;
+        }
+
+        setDestinationOptions(
+          (data.churches || []).map((church) => ({
+            totvs_church_id: String(church.totvs_id || "").trim(),
+            church_name: String(church.church_name || "").trim(),
+          })),
+        );
+      } finally {
+        setSearchingDestinations(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [letterForm.igreja_destino, letterForm.igreja_destino_manual, createOpen]);
+
   const clearNotifications = () => {
     void supabase.functions
       .invoke(MARK_NOTIFICATIONS_READ_FUNCTION_NAME, {
@@ -457,6 +521,7 @@ export default function Obreiro() {
       const { data, error } = await supabase.functions.invoke<{
         ok?: boolean;
         error?: string;
+        profile?: Record<string, unknown>;
       }>("save-my-profile", {
         body: {
           full_name: profile.nome.trim(),
@@ -476,10 +541,12 @@ export default function Obreiro() {
       });
       if (error || !data?.ok) throw new Error(data?.error || error?.message || "Nao foi possivel atualizar o cadastro.");
 
-      const nextProfile = { ...profile };
+      const nextProfile = data.profile
+        ? mapSavedProfileToObreiroProfile(data.profile, profile)
+        : { ...profile };
       writeProfileToStorage(nextProfile);
+      setProfile(nextProfile);
       toast.success("Cadastro atualizado com sucesso.");
-      await loadProfile();
     } catch (err: any) {
       toast.error(err?.message || "Nao foi possivel atualizar o cadastro.");
     } finally {
@@ -935,7 +1002,6 @@ export default function Obreiro() {
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <Input
-                      list="destino-igrejas-list"
                       value={letterForm.igreja_destino}
                       onChange={(e) =>
                         setLetterForm((prev) => ({
@@ -948,14 +1014,30 @@ export default function Obreiro() {
                       disabled={!!letterForm.igreja_destino_manual.trim()}
                       className="pl-10"
                     />
-                    <datalist id="destino-igrejas-list">
-                      {destinationOptions.map((item) => (
-                        <option key={item.totvs_church_id} value={item.church_name}>
-                          {item.totvs_church_id} - {item.church_name}
-                        </option>
-                      ))}
-                    </datalist>
                   </div>
+                  {filteredDestinationOptions.length > 0 && (
+                    <div className="max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-sm">
+                      {filteredDestinationOptions.map((item) => (
+                        <button
+                          key={item.totvs_church_id}
+                          type="button"
+                          className="flex w-full items-start justify-between gap-3 border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
+                          onClick={() =>
+                            setLetterForm((prev) => ({
+                              ...prev,
+                              igreja_destino: `${item.totvs_church_id} - ${item.church_name}`,
+                              igreja_destino_manual: "",
+                            }))
+                          }
+                        >
+                          <span className="font-medium text-slate-900">{item.totvs_church_id} - {item.church_name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {searchingDestinations && (
+                    <p className="text-xs text-muted-foreground">Buscando igrejas...</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Outros (se nao encontrar)</Label>

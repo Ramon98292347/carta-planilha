@@ -182,7 +182,7 @@ Deno.serve(async (req) => {
         destino_nome: parseChurchNameFromText(String(letter.church_destination || "")),
         email: String(letter.email || ""),
         ministerial: String(letter.minister_role || ""),
-        data_separacao: String((preacherUser as Record<string, unknown> | null)?.ordination_date || ""),
+        data_separacao: formatDateBrShort(String((preacherUser as Record<string, unknown> | null)?.ordination_date || "")),
         pastor_responsavel: String((signerUser as Record<string, unknown> | null)?.full_name || ""),
         telefone_pastor: String((signerUser as Record<string, unknown> | null)?.phone || ""),
         assinatura_url: String((signerUser as Record<string, unknown> | null)?.signature_url || ""),

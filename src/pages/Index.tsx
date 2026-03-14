@@ -362,6 +362,16 @@ const Index = () => {
     () => churches.map((church) => ({ value: `${church.totvs_id} - ${church.church_name}`, church })),
     [churches],
   );
+  const filteredPastorDestinationOptions = useMemo(() => {
+    const term = normalizeSearch(letterForm.church_destination);
+    if (term.length < 2 || letterForm.church_destination_manual.trim()) return [];
+    return destinationOptions
+      .filter(({ value, church }) => {
+        const haystack = normalizeSearch(`${value} ${church.class || ""}`);
+        return haystack.includes(term);
+      })
+      .slice(0, 12);
+  }, [destinationOptions, letterForm.church_destination, letterForm.church_destination_manual]);
 
   const handleInstall = async () => {
     if (!installPrompt) return;
@@ -754,7 +764,7 @@ const Index = () => {
 
         {connected && !loading && (
           <>
-            <MetricCards cartas={filteredCartas} obreiros={obreiros} />
+            <MetricCards cartas={filteredCartas} obreiros={obreiros} churches={churches} />
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <div className="overflow-x-auto pb-1">
@@ -1178,7 +1188,6 @@ const Index = () => {
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <Input
-                      list="pastor-destino-igrejas-list"
                       value={letterForm.church_destination}
                       onChange={(e) =>
                         setLetterForm((prev) => ({
@@ -1191,14 +1200,28 @@ const Index = () => {
                       disabled={!!letterForm.church_destination_manual.trim()}
                       className="pl-10"
                     />
-                    <datalist id="pastor-destino-igrejas-list">
-                      {destinationOptions.map(({ value }) => (
-                        <option key={value} value={value}>
-                          {value}
-                        </option>
-                      ))}
-                    </datalist>
                   </div>
+                  {filteredPastorDestinationOptions.length > 0 && (
+                    <div className="max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-sm">
+                      {filteredPastorDestinationOptions.map(({ value, church }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className="flex w-full items-start justify-between gap-3 border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
+                          onClick={() =>
+                            setLetterForm((prev) => ({
+                              ...prev,
+                              church_destination: value,
+                              church_destination_manual: "",
+                            }))
+                          }
+                        >
+                          <span className="font-medium text-slate-900">{value}</span>
+                          <span className="shrink-0 text-xs uppercase tracking-wide text-slate-500">{church.class}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Outros (se nao encontrar)</Label>
