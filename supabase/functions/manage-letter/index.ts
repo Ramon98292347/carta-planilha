@@ -29,6 +29,30 @@ function parseTotvsFromText(value: string): string {
   return match ? match[1] : "";
 }
 
+function parseChurchNameFromText(value: string) {
+  return String(value || "").replace(/^(\d{3,})\s*-\s*/, "").trim();
+}
+
+function formatDateBrShort(value: string) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return raw;
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+function formatDateBrLong(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
 async function postToN8n(payload: Record<string, unknown>) {
   let ok = false;
   let status = 0;
@@ -100,7 +124,7 @@ Deno.serve(async (req) => {
 
     const { data: letter, error: letterErr } = await sb
       .from("letters")
-      .select("id,status,church_origin,church_totvs_id,released_by_name,released_at,sent_at,raw_payload,webhook_response")
+      .select("id,status,church_origin,church_destination,church_totvs_id,preacher_user_id,preacher_name,minister_role,preach_date,created_at,phone,email,signer_user_id,signer_totvs_id,released_by_name,released_at,sent_at,raw_payload,webhook_response")
       .eq("id", letterId)
       .maybeSingle();
 
@@ -132,13 +156,45 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "blocked_letter" }, 409);
       }
 
-      const payload = (letter.raw_payload && typeof letter.raw_payload === "object" && !Array.isArray(letter.raw_payload))
-        ? { ...(letter.raw_payload as Record<string, unknown>) }
-        : null;
+      const [{ data: preacherUser }, { data: signerUser }, { data: signerChurch }] = await Promise.all([
+        letter.preacher_user_id
+          ? sb.from("users").select("id, ordination_date, is_active").eq("id", String(letter.preacher_user_id)).maybeSingle()
+          : Promise.resolve({ data: null }),
+        letter.signer_user_id
+          ? sb.from("users").select("id, full_name, phone, email, signature_url, stamp_pastor_url").eq("id", String(letter.signer_user_id)).maybeSingle()
+          : Promise.resolve({ data: null }),
+        letter.signer_totvs_id
+          ? sb.from("churches").select("totvs_id, church_name, stamp_church_url, address_city, address_state").eq("totvs_id", String(letter.signer_totvs_id)).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
 
-      if (!payload) {
-        return json({ ok: false, error: "missing_letter_payload", details: "Carta sem payload salvo para envio ao webhook." }, 409);
-      }
+      const payload = {
+        nome: String(letter.preacher_name || ""),
+        telefone: String(letter.phone || ""),
+        igreja_origem: String(letter.church_origin || ""),
+        origem: String(letter.church_origin || ""),
+        igreja_destino: String(letter.church_destination || ""),
+        dia_pregacao: formatDateBrShort(String(letter.preach_date || "")),
+        data_emissao: formatDateBrLong(String(letter.created_at || "")),
+        origem_totvs: parseTotvsFromText(String(letter.church_origin || "")),
+        destino_totvs: parseTotvsFromText(String(letter.church_destination || "")),
+        origem_nome: parseChurchNameFromText(String(letter.church_origin || "")),
+        destino_nome: parseChurchNameFromText(String(letter.church_destination || "")),
+        email: String(letter.email || ""),
+        ministerial: String(letter.minister_role || ""),
+        data_separacao: String((preacherUser as Record<string, unknown> | null)?.ordination_date || ""),
+        pastor_responsavel: String((signerUser as Record<string, unknown> | null)?.full_name || ""),
+        telefone_pastor: String((signerUser as Record<string, unknown> | null)?.phone || ""),
+        assinatura_url: String((signerUser as Record<string, unknown> | null)?.signature_url || ""),
+        carimbo_igreja_url: String((signerChurch as Record<string, unknown> | null)?.stamp_church_url || ""),
+        carimbo_pastor_url: String((signerUser as Record<string, unknown> | null)?.stamp_pastor_url || ""),
+        cidade_igreja: String((signerChurch as Record<string, unknown> | null)?.address_city || ""),
+        uf_igreja: String((signerChurch as Record<string, unknown> | null)?.address_state || ""),
+        status_usuario: (preacherUser as Record<string, unknown> | null)?.is_active === false ? "BLOQUEADO" : "AUTORIZADO",
+        status_carta: "LIBERADA",
+        client_id: String(letter.church_totvs_id || ""),
+        obreiro_id: String(letter.preacher_user_id || ""),
+      };
 
       const result = await postToN8n(payload);
       if (!result.ok) {
@@ -149,6 +205,7 @@ Deno.serve(async (req) => {
         status: "LIBERADA",
         released_by_name: actorName,
         released_at: now,
+        raw_payload: payload,
         webhook_response: result.response || {},
       };
     }

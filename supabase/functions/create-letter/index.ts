@@ -48,6 +48,8 @@ type ChurchNode = {
   class: ChurchClass | null;
   stamp_church_url: string | null;
   pastor_user_id: string | null;
+  address_city: string | null;
+  address_state: string | null;
 };
 
 function normalizeClass(v: unknown): ChurchClass | null {
@@ -243,6 +245,30 @@ function todayUTC(): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
+function parseChurchNameFromText(value: string) {
+  return String(value || "").replace(/^(\d{3,})\s*-\s*/, "").trim();
+}
+
+function formatDateBrShort(value: string) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return raw;
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+function formatDateBrLong(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
 async function postToN8n(payload: Record<string, unknown>) {
   let ok = false;
   let status = 0;
@@ -297,7 +323,7 @@ Deno.serve(async (req) => {
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: churchesRaw, error: churchesErr } = await sb
       .from("churches")
-      .select("totvs_id,parent_totvs_id,church_name,class,stamp_church_url,pastor_user_id");
+      .select("totvs_id,parent_totvs_id,church_name,class,stamp_church_url,pastor_user_id,address_city,address_state");
 
     if (churchesErr) return json({ ok: false, error: "db_error_church_tree", details: churchesErr.message }, 500);
 
@@ -308,6 +334,8 @@ Deno.serve(async (req) => {
       class: normalizeClass(r.class),
       stamp_church_url: r.stamp_church_url ? String(r.stamp_church_url) : null,
       pastor_user_id: r.pastor_user_id ? String(r.pastor_user_id) : null,
+      address_city: r.address_city ? String(r.address_city) : null,
+      address_state: r.address_state ? String(r.address_state) : null,
     }));
 
     const byId = mapById(churches);
@@ -405,6 +433,7 @@ Deno.serve(async (req) => {
     let minister_role = String(body.minister_role || "").trim();
     let preacher_phone = String(body.phone || "").trim() || null;
     let preacher_email = String(body.email || "").trim() || null;
+    let preacher_ordination_date = "";
 
     let status = "AGUARDANDO_LIBERACAO";
     let canDirectRelease = false;
@@ -412,7 +441,7 @@ Deno.serve(async (req) => {
     if (session.role === "obreiro") {
       const { data: me, error: meErr } = await sb
         .from("users")
-        .select("id, full_name, minister_role, phone, email, can_create_released_letter")
+        .select("id, full_name, minister_role, phone, email, can_create_released_letter, ordination_date")
         .eq("id", session.user_id)
         .maybeSingle();
 
@@ -424,17 +453,24 @@ Deno.serve(async (req) => {
       minister_role = String(me.minister_role || "").trim();
       preacher_phone = String((me as Record<string, unknown>).phone || "").trim() || null;
       preacher_email = String((me as Record<string, unknown>).email || "").trim() || null;
+      preacher_ordination_date = String((me as Record<string, unknown>).ordination_date || "").trim();
       if (!preacher_name) return json({ ok: false, error: "missing_preacher_name_in_profile" }, 400);
       if (!minister_role) return json({ ok: false, error: "missing_minister_role_in_profile" }, 400);
       canDirectRelease = Boolean((me as Record<string, unknown>).can_create_released_letter);
     } else {
       if (!preacher_name) return json({ ok: false, error: "missing_preacher_name" }, 400);
       if (!minister_role) return json({ ok: false, error: "missing_minister_role" }, 400);
-      if (!preacher_user_id) preacher_user_id = session.user_id;
+      if (!preacher_user_id) {
+        return json({
+          ok: false,
+          error: "missing_preacher_user_id",
+          detail: "A carta precisa estar vinculada ao usuario alvo para validar a liberacao automatica.",
+        }, 400);
+      }
 
       const { data: target, error: targetErr } = await sb
         .from("users")
-        .select("id, phone, email, can_create_released_letter")
+        .select("id, phone, email, can_create_released_letter, ordination_date")
         .eq("id", preacher_user_id)
         .maybeSingle();
 
@@ -442,6 +478,7 @@ Deno.serve(async (req) => {
       canDirectRelease = Boolean((target as Record<string, unknown> | null)?.can_create_released_letter);
       if (!preacher_phone) preacher_phone = String((target as Record<string, unknown> | null)?.phone || "").trim() || null;
       if (!preacher_email) preacher_email = String((target as Record<string, unknown> | null)?.email || "").trim() || null;
+      preacher_ordination_date = String((target as Record<string, unknown> | null)?.ordination_date || "").trim();
     }
 
     if (canDirectRelease) status = "LIBERADA";
@@ -470,48 +507,31 @@ Deno.serve(async (req) => {
     if (insErr) return json({ ok: false, error: "insert_failed", details: insErr.message }, 400);
 
     const n8nPayload = {
-      action: "create_letter",
-      letter_id: created.id,
-      church_totvs_id: created.church_totvs_id,
-      preacher_user_id: created.preacher_user_id,
-      preacher_name: created.preacher_name,
-      minister_role: created.minister_role,
-      preach_date: created.preach_date,
-      preach_period: created.preach_period,
-      church_origin: created.church_origin,
-      church_destination: created.church_destination,
-      phone: preacher_phone,
-      email: preacher_email,
-      created_by_user_id: session.user_id,
-      created_by_role: session.role,
-      actor_user: {
-        id: String((actorUser as Record<string, unknown> | null)?.id || session.user_id),
-        full_name: String((actorUser as Record<string, unknown> | null)?.full_name || ""),
-        phone: String((actorUser as Record<string, unknown> | null)?.phone || "") || null,
-        email: String((actorUser as Record<string, unknown> | null)?.email || "") || null,
-        minister_role: String((actorUser as Record<string, unknown> | null)?.minister_role || "") || null,
-      },
-      origin_church: {
-        totvs_id: originTotvs,
-        church_name: originChurch?.church_name || null,
-        church_class: originChurch?.class || null,
-      },
-      origin_pastor: {
-        id: originPastorId || null,
-        full_name: String(originPastorUser?.full_name || "") || null,
-        phone: String(originPastorUser?.phone || "") || null,
-        email: String(originPastorUser?.email || "") || null,
-      },
-      signature_url: (pastorUser as Record<string, unknown>).signature_url ?? null,
-      stamp_pastor_url: (pastorUser as Record<string, unknown>).stamp_pastor_url ?? null,
-      stamp_church_url: signerChurch.stamp_church_url ?? null,
-      pastor_name: (pastorUser as Record<string, unknown>).full_name ?? null,
-      pastor_phone: (pastorUser as Record<string, unknown>).phone ?? null,
-      pastor_email: (pastorUser as Record<string, unknown>).email ?? null,
-      church_name: signerChurch.church_name ?? null,
-      signer_totvs_id: signerChurch.totvs_id,
-      signer_class: signerChurch.class,
-      issued_at: created.created_at,
+      nome: created.preacher_name || "",
+      telefone: preacher_phone || "",
+      igreja_origem: created.church_origin || "",
+      origem: created.church_origin || "",
+      igreja_destino: created.church_destination || "",
+      dia_pregacao: formatDateBrShort(created.preach_date || ""),
+      data_emissao: formatDateBrLong(created.created_at || ""),
+      origem_totvs: originTotvs || "",
+      destino_totvs: destinationTotvs || "",
+      origem_nome: originChurch?.church_name || parseChurchNameFromText(created.church_origin || ""),
+      destino_nome: parseChurchNameFromText(created.church_destination || ""),
+      email: preacher_email || "",
+      ministerial: created.minister_role || "",
+      data_separacao: preacher_ordination_date || "",
+      pastor_responsavel: String((pastorUser as Record<string, unknown>).full_name || ""),
+      telefone_pastor: String((pastorUser as Record<string, unknown>).phone || ""),
+      assinatura_url: String((pastorUser as Record<string, unknown>).signature_url || ""),
+      carimbo_igreja_url: signerChurch.stamp_church_url || "",
+      carimbo_pastor_url: String((pastorUser as Record<string, unknown>).stamp_pastor_url || ""),
+      cidade_igreja: signerChurch.address_city || "",
+      uf_igreja: signerChurch.address_state || "",
+      status_usuario: "AUTORIZADO",
+      status_carta: created.status || "",
+      client_id: created.church_totvs_id || "",
+      obreiro_id: created.preacher_user_id || "",
     };
 
     let n8nOk = false;
