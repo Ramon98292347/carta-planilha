@@ -1,489 +1,305 @@
-﻿import { useState, useEffect, useCallback, useRef } from "react";
-import { extractSpreadsheetId, fetchSheetData, transformAcessoRow, transformCartaRow, transformObreiroRow } from "@/lib/sheets";
-import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
-import { toast } from "sonner";
+﻿import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
-const STORAGE_KEY = "sheets_dashboard_url";
-const STORAGE_SHEET_KEY = "sheets_dashboard_custom_sheet";
-const PRIMARY_CARTAS_SHEET = "Respostas ao formulário 1";
-const PRIMARY_CARTAS_SHEET_ALT = "Respostas do Formulário 1";
-const PRIMARY_CARTAS_SHEET_ALT2 = "Respostas do formulário 1";
-const PRIMARY_CARTAS_SHEET_ALT3 = "Respostas do Formulario 1";
 const REFRESH_INTERVAL_MS = 30000;
-const RECENT_WINDOW_MS = 4 * 60 * 60 * 1000;
-const NOTIFY_WINDOW_MS = 4 * 60 * 60 * 1000;
-const NOTIFICATIONS_STORAGE_KEY = "cartas_notifications";
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
-const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
+const LIST_MEMBERS_FUNCTION_NAME = (import.meta.env.VITE_LIST_MEMBERS_FUNCTION_NAME || "list-members").trim();
+const LIST_LETTERS_FUNCTION_NAME = (import.meta.env.VITE_LIST_LETTERS_FUNCTION_NAME || "list-letters").trim();
+const LIST_CHURCHES_FUNCTION_NAME = (import.meta.env.VITE_LIST_CHURCHES_FUNCTION_NAME || "list-churches-in-scope").trim();
+const LIST_NOTIFICATIONS_FUNCTION_NAME = (import.meta.env.VITE_LIST_NOTIFICATIONS_FUNCTION_NAME || "list-notifications").trim();
+
+type NotificationItem = { id: string; title: string; body: string; ts: number };
+type ChurchRow = {
+  totvs_id: string;
+  parent_totvs_id?: string | null;
+  church_name: string;
+  class: string;
+};
+type LetterRow = {
+  id: string;
+  church_totvs_id: string;
+  preacher_user_id?: string | null;
+  preacher_name: string;
+  minister_role: string;
+  preach_date: string;
+  church_origin: string;
+  church_destination: string;
+  created_at: string;
+  status: string;
+  preach_period?: string | null;
+  preacher_phone?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  doc_id?: string | null;
+  pdf_url?: string | null;
+  url_carta?: string | null;
+  released_by_name?: string | null;
+  released_at?: string | null;
+  sent_at?: string | null;
+};
+type MemberRow = {
+  id: string;
+  full_name: string;
+  cpf?: string | null;
+  phone: string;
+  email?: string | null;
+  minister_role?: string | null;
+  default_totvs_id?: string | null;
+  is_active: boolean;
+  can_create_released_letter?: boolean;
+  ordination_date?: string | null;
+  baptism_date?: string | null;
+  role: string;
+};
+type NotificationRow = {
+  id: string;
+  title: string;
+  message?: string | null;
+  created_at: string;
+};
+
+type ChurchesResponse = {
+  ok?: boolean;
+  churches?: ChurchRow[];
+};
+
+type MembersResponse = {
+  ok?: boolean;
+  members?: MemberRow[];
+};
+
+type LettersResponse = {
+  ok?: boolean;
+  letters?: LetterRow[];
+};
+
+type NotificationsResponse = {
+  ok?: boolean;
+  notifications?: NotificationRow[];
+};
+
+const formatDateBr = (value: string | null | undefined) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "-";
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const [year, month, day] = raw.split("-");
+      return `${day}/${month}/${year}`;
+    }
+    return raw;
+  }
+
+  return date.toLocaleDateString("pt-BR");
+};
+
+const mapLetterStatus = (status: string) => {
+  const normalized = String(status || "").trim().toUpperCase();
+  if (normalized === "ENVIADA") return "Carta enviada";
+  if (normalized === "LIBERADA") return "Carta liberada";
+  if (normalized === "BLOQUEADO") return "Bloqueado";
+  return "Aguardando liberacao";
+};
+
+const parseTotvsFromText = (value: string) => {
+  const match = String(value || "").trim().match(/^(\d{3,})\b/);
+  return match ? match[1] : "";
+};
 
 export function useSheetData() {
-  const [url, setUrl] = useState(() => localStorage.getItem(STORAGE_KEY) || "");
-  const [customSheetName, setCustomSheetName] = useState(() => localStorage.getItem(STORAGE_SHEET_KEY) || "");
+  const [url, setUrl] = useState("");
+  const [customSheetName, setCustomSheetName] = useState("");
   const [cartas, setCartas] = useState<Record<string, string>[]>([]);
   const [obreiros, setObreiros] = useState<Record<string, string>[]>([]);
   const [sendStatusById, setSendStatusById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState(Boolean(localStorage.getItem("app_token") || localStorage.getItem("session_key")));
   const [offline, setOffline] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
   const [hasObreiros, setHasObreiros] = useState(false);
-  const [cartasSheetUsed, setCartasSheetUsed] = useState("");
-  const initializedKeysRef = useRef(false);
-  const syncInFlightRef = useRef(false);
-  const lastSeenCarimboMsRef = useRef<number | null>(null);
-  const lastNotifiedTsRef = useRef<number | null>(null);
-  const [notifications, setNotifications] = useState<{ id: string; title: string; body: string; ts: number }[]>(() => {
-    const raw = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
-    if (!raw) return [];
-    try {
-      const parsed = JSON.parse(raw) as { id: string; title: string; body: string; ts: number }[];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
+  const [cartasSheetUsed, setCartasSheetUsed] = useState("letters");
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [churches, setChurches] = useState<ChurchRow[]>([]);
 
-  const fetchClientCache = async () => {
-    const clientId = (localStorage.getItem("clientId") || "").trim();
-    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-
-    const headers = getSupabaseHeaders({ json: false });
-
-    try {
-      const params = new URLSearchParams({ select: "last_15_cards", limit: "1" });
-      params.set("client_id", `eq.${clientId}`);
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/client_cache?${params.toString()}`, { headers });
-      if (!response.ok) return null;
-      const payload = (await response.json().catch(() => [])) as { last_15_cards?: Record<string, string>[] }[];
-      return payload?.[0]?.last_15_cards ?? null;
-    } catch {
-      return null;
-    }
-  };
-
-  const fetchObreirosAuth = async (): Promise<Record<string, string>[] | null> => {
-    const clientId = (localStorage.getItem("clientId") || "").trim();
-    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-
-    const headers = getSupabaseHeaders({ json: false });
-    const churchName = (localStorage.getItem("church_name") || "").trim();
-
-    try {
-      const params = new URLSearchParams({
-        select: "id,nome,telefone,email,status,data_nascimento,created_at,updated_at",
-        limit: "5000",
-      });
-      params.set("client_id", `eq.${clientId}`);
-      params.set("order", "updated_at.desc");
-
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${params.toString()}`, { headers });
-      if (!response.ok) return null;
-
-      const payload = (await response.json().catch(() => [])) as Array<{
-        id?: string | null;
-        nome?: string | null;
-        telefone?: string | null;
-        email?: string | null;
-        status?: string | null;
-        data_nascimento?: string | null;
-      }>;
-
-      return payload.map((item) => ({
-        id: String(item.id || "").trim(),
-        nome: String(item.nome || "-").trim() || "-",
-        telefone: String(item.telefone || "-").trim() || "-",
-        email: String(item.email || "-").trim() || "-",
-        status: String(item.status || "AUTORIZADO").trim() || "AUTORIZADO",
-        cargo: "-",
-        igreja: churchName || "-",
-        campo: "-",
-        data_ordenacao: "-",
-        data_batismo: String(item.data_nascimento || "-").trim() || "-",
-      }));
-    } catch {
-      return null;
-    }
-  };
-
-  const upsertClientCache = async (cartasRows: Record<string, string>[]) => {
-    const clientId = (localStorage.getItem("clientId") || "").trim();
-    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-
-    const headers = {
-      ...getSupabaseHeaders(),
-      Prefer: "resolution=merge-duplicates",
-    };
-
-    const payload = {
-      client_id: clientId,
-      last_15_cards: cartasRows,
-    };
-
-    try {
-      await fetch(`${SUPABASE_URL}/rest/v1/client_cache?on_conflict=client_id`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-      });
-    } catch {
-      // ignore
-    }
-  };
-
-  const logClientError = async (message: string, context?: string) => {
-    const clientId = (localStorage.getItem("clientId") || "").trim();
-    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-
-    const headers = getSupabaseHeaders();
-
-    const payload = {
-      client_id: clientId,
-      message,
-      context: context || null,
-      created_at: new Date().toISOString(),
-    };
-
-    try {
-      await fetch(`${SUPABASE_URL}/rest/v1/client_erros`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-      });
-    } catch {
-      // ignore
-    }
-  };
-
-  const normalize = (v: string) =>
-    (v || "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]/g, "");
-
-  const parseCarimboDateTime = (value: string): Date | null => {
-    if (!value || value === "-") return null;
-    const v = value.trim();
-    const match = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-    if (!match) return null;
-    const day = Number(match[1]);
-    const month = Number(match[2]) - 1;
-    const year = Number(match[3]);
-    const hour = Number(match[4] || 0);
-    const minute = Number(match[5] || 0);
-    const second = Number(match[6] || 0);
-    const date = new Date(year, month, day, hour, minute, second);
-    return Number.isNaN(date.getTime()) ? null : date;
-  };
-
-  const connect = useCallback(async (inputUrl: string, sheetName?: string, options?: { silent?: boolean }) => {
-    const silent = options?.silent ?? false;
-
-    const id = extractSpreadsheetId(inputUrl);
-    if (!id) {
-      if (!silent) setError("URL inválida. Cole uma URL do Google Sheets que contenha /spreadsheets/d/ID/");
+  const refresh = useCallback(async () => {
+    const sessionToken = (localStorage.getItem("app_token") || localStorage.getItem("session_key") || "").trim();
+    const userRole = (localStorage.getItem("user_role") || "").trim().toLowerCase();
+    const activeTotvsId = (localStorage.getItem("totvs_church_id") || "").trim();
+    if (!sessionToken) {
+      setConnected(false);
+      setCartas([]);
+      setObreiros([]);
+      setNotifications([]);
+      setError(null);
       return;
     }
 
-    if (syncInFlightRef.current) return;
-    syncInFlightRef.current = true;
-
-    if (!silent) {
-      setLoading(true);
-      setError(null);
-    }
+    setLoading(true);
+    setError(null);
 
     try {
-      if (!silent && !initializedKeysRef.current) {
-        const cached = await fetchClientCache();
-        if (cached && cached.length > 0) {
-          setCartas(cached);
-        }
-      }
-      // Sempre prioriza a aba oficial de dados de cartas
-      let cartasData: Record<string, string>[] = [];
-      let usedSheet = "";
-      const cartasSheets = [
-        PRIMARY_CARTAS_SHEET,
-        PRIMARY_CARTAS_SHEET_ALT,
-        PRIMARY_CARTAS_SHEET_ALT2,
-        PRIMARY_CARTAS_SHEET_ALT3,
-        "CARTAS_DB",
-        "CARTAS",
-      ];
-      if (sheetName?.trim() && !cartasSheets.includes(sheetName.trim())) {
-        cartasSheets.push(sheetName.trim());
-      }
+      // Comentario: a leitura do painel agora usa apenas Edge Functions.
+      // Isso segue o padrão do projeto maior e evita os 401 do /rest/v1 com ES256.
+      const [churchesResult, membersResult, lettersResult, notificationsResult] = await Promise.all([
+        supabase.functions.invoke<ChurchesResponse>(LIST_CHURCHES_FUNCTION_NAME, {
+          body: { page: 1, page_size: 500 },
+        }),
+        supabase.functions.invoke<MembersResponse>(LIST_MEMBERS_FUNCTION_NAME, {
+          body: { page: 1, page_size: 500, roles: ["obreiro"] },
+        }),
+        supabase.functions.invoke<LettersResponse>(LIST_LETTERS_FUNCTION_NAME, {
+          body: { page: 1, page_size: 500 },
+        }),
+        supabase.functions.invoke<NotificationsResponse>(LIST_NOTIFICATIONS_FUNCTION_NAME, {
+          body: { page: 1, page_size: 50 },
+        }),
+      ]);
 
-      for (const sheet of cartasSheets) {
-        try {
-          cartasData = await fetchSheetData(id, sheet);
-          if (cartasData.length > 0) {
-            usedSheet = sheet;
-            break;
-          }
-        } catch {
-          // try next
-        }
-      }
+      if (churchesResult.error) throw churchesResult.error;
+      if (membersResult.error) throw membersResult.error;
+      if (lettersResult.error) throw lettersResult.error;
+      if (notificationsResult.error) throw notificationsResult.error;
 
-      // Transform cartas to internal model
-      if (cartasData.length > 0) {
-        cartasData = cartasData
-          .map(transformCartaRow)
-          .filter((row) =>
-            [row.data_emissao, row.nome, row.data_pregacao, row.igreja_origem, row.igreja_destino, row.status, row.url_pdf].some(
-              (v) => v && v !== "-" && v !== "â€”" && v !== "—"
-            )
-          );
+      const churches = churchesResult.data?.churches || [];
+      const members = membersResult.data?.members || [];
+      let letters = lettersResult.data?.letters || [];
+      const notificationsRows = notificationsResult.data?.notifications || [];
+
+      // Comentario: para pastor, o painel mostra apenas as cartas emitidas
+      // pela church_origin da igreja ativa do login.
+      if (userRole === "pastor" && activeTotvsId) {
+        letters = letters.filter((row) => parseTotvsFromText(String(row.church_origin || "")) === activeTotvsId);
       }
 
-      // Try ACESSO and merge status/motivo onto cartas
-      let acessoData: Record<string, string>[] = [];
-      for (const sheet of ["ACESSO", "ACESSOS", "ACESSO_DB"]) {
-        try {
-          const raw = await fetchSheetData(id, sheet);
-          if (raw.length > 0) {
-            acessoData = raw.map(transformAcessoRow);
-            break;
-          }
-        } catch {
-          // try next
-        }
-      }
+      const churchByTotvs = new Map<string, ChurchRow>();
+      churches.forEach((church) => {
+        churchByTotvs.set(String(church.totvs_id || "").trim(), church);
+      });
 
-      if (cartasData.length > 0 && acessoData.length > 0) {
-        const acessoByNome = new Map<string, Record<string, string>>();
-        const acessoByTelefone = new Map<string, Record<string, string>>();
-        const acessoByEmail = new Map<string, Record<string, string>>();
+      const nextCartas = letters.map((row) => {
+        const rawStatus = String(row.status || "").trim().toUpperCase();
+        const phone = String(row.preacher_phone || row.phone || "").trim();
+        const churchMeta = churchByTotvs.get(String(row.church_totvs_id || "").trim());
 
-        acessoData.forEach((row) => {
-          const emailKey = normalize(row.email);
-          const nomeKey = normalize(row.nome);
-          const telKey = normalize(row.telefone);
-          if (emailKey) acessoByEmail.set(emailKey, row);
-          if (nomeKey) acessoByNome.set(nomeKey, row);
-          if (telKey) acessoByTelefone.set(telKey, row);
-        });
+        return {
+          id: String(row.id || "").trim(),
+          doc_id: String(row.doc_id || "").trim(),
+          raw_status: rawStatus,
+          church_totvs_id: String(row.church_totvs_id || "").trim(),
+          preacher_user_id: String(row.preacher_user_id || "").trim(),
+          nome: String(row.preacher_name || "-").trim() || "-",
+          telefone: phone || "-",
+          email: String(row.email || "-").trim() || "-",
+          data_emissao: formatDateBr(row.created_at),
+          data_pregacao: formatDateBr(row.preach_date),
+          data_ordenacao: "-",
+          igreja_origem: String(row.church_origin || "-").trim() || "-",
+          igreja_destino: String(row.church_destination || "-").trim() || "-",
+          cargo: String(row.minister_role || "-").trim() || "-",
+          funcao: String(row.minister_role || "-").trim() || "-",
+          regiao: String(churchMeta?.class || "-").trim() || "-",
+          status: mapLetterStatus(rawStatus),
+          status_carta: rawStatus === "LIBERADA" || rawStatus === "ENVIADA" ? "LIBERADA" : rawStatus === "BLOQUEADO" ? "GERADA" : "GERADA",
+          status_usuario: rawStatus === "BLOQUEADO" ? "BLOQUEADO" : "",
+          envio: rawStatus === "ENVIADA" ? "ENVIADO" : "",
+          drive_status: rawStatus === "ENVIADA" ? "CARTA_ENVIADA" : "",
+          data_liberacao: formatDateBr(row.released_at),
+          liberado_por: String(row.released_by_name || "-").trim() || "-",
+          data_envio: formatDateBr(row.sent_at),
+          url_pdf: String(row.pdf_url || row.url_carta || "").trim(),
+          pdf_url: String(row.pdf_url || "").trim(),
+          doc_url: String(row.url_carta || "").trim(),
+        };
+      });
 
-        cartasData = cartasData.map((row) => {
-          const fromEmail = acessoByEmail.get(normalize(row.email));
-          const fromNome = acessoByNome.get(normalize(row.nome));
-          const fromTel = acessoByTelefone.get(normalize(row.telefone));
-          const acesso = fromEmail ?? fromTel ?? fromNome;
-          const next = { ...row, status: "-", motivo_bloqueio: "-" };
-          if (!acesso) return next;
+      const nextObreiros = members.map((row) => {
+        const church = churchByTotvs.get(String(row.default_totvs_id || "").trim());
+        return {
+          id: String(row.id || "").trim(),
+          cpf: String(row.cpf || "").trim(),
+          nome: String(row.full_name || "-").trim() || "-",
+          cargo: String(row.minister_role || "-").trim() || "-",
+          igreja: String(church?.church_name || row.default_totvs_id || "-").trim() || "-",
+          campo: String(church?.class || "-").trim() || "-",
+          status: row.is_active ? "AUTORIZADO" : "BLOQUEADO",
+          status_usuario: row.is_active ? "" : "BLOQUEADO",
+          status_carta: row.can_create_released_letter ? "LIBERADA" : "GERADA",
+          can_create_released_letter: row.can_create_released_letter ? "1" : "0",
+          data_ordenacao: formatDateBr(row.ordination_date),
+          data_batismo: formatDateBr(row.baptism_date),
+          telefone: String(row.phone || "-").trim() || "-",
+          email: String(row.email || "-").trim() || "-",
+          funcao: String(row.minister_role || "-").trim() || "-",
+          regiao: String(church?.class || "-").trim() || "-",
+          church_totvs_id: String(row.default_totvs_id || "").trim(),
+          default_totvs_id: String(row.default_totvs_id || "").trim(),
+        };
+      });
 
-          const status = (acesso.status || "").trim();
-          const motivo = (acesso.motivo || "").trim();
+      const nextNotifications = notificationsRows.map((row) => ({
+        id: String(row.id || "").trim(),
+        title: String(row.title || "Notificacao").trim() || "Notificacao",
+        body: String(row.message || "").trim(),
+        ts: new Date(String(row.created_at || "")).getTime() || Date.now(),
+      }));
 
-          if (status) next.status = status;
-          if (motivo && motivo !== "-" && motivo !== "—" && motivo !== "â€”") next.motivo_bloqueio = motivo;
-          return next;
-        });
-      }
-
-      if (cartasData.length > 0) {
-        cartasData = cartasData.slice(-10).reverse();
-      }
-
-      // Fonte principal da aba Obreiros: tabela obreiros_auth
-      let obreirosData: Record<string, string>[] = [];
-      let obOk = false;
-      const obreirosFromAuth = await fetchObreirosAuth();
-      if (obreirosFromAuth) {
-        obreirosData = obreirosFromAuth;
-        obOk = true;
-      }
-
-      // Fallback: aba da planilha somente se a consulta no banco falhar
-      if (!obOk) {
-        for (const sheet of ["OBREIRO", "Obreiro", "OBREIROS", "OBREIROS_DB"]) {
-          try {
-            obreirosData = await fetchSheetData(id, sheet);
-            if (obreirosData.length > 0) {
-              obreirosData = obreirosData.map((raw) => {
-                const normalized = transformObreiroRow(raw);
-                const merged: Record<string, string> = { ...raw, ...normalized };
-                Object.keys(merged).forEach((key) => {
-                  if (key.startsWith("__col_")) delete merged[key];
-                });
-                return merged;
-              });
-              obOk = true;
-              break;
-            }
-          } catch {
-            // try next
-          }
-        }
-      }
-
-      if (cartasData.length === 0 && !obOk) {
-        const hint = sheetName?.trim()
-          ? `Nenhum dado encontrado nas abas CARTAS_DB, "${sheetName}", CARTAS, OBREIROS_DB ou OBREIROS.`
-          : "Nenhum dado encontrado. Verifique se a planilha está publicada e possui as abas CARTAS_DB (ou CARTAS) e/ou OBREIROS_DB (ou OBREIROS). Você também pode informar o nome da aba de cartas abaixo.";
-        throw new Error(hint);
-      }
-
-      const sortedByCarimbo = [...cartasData]
-        .map((row) => ({ row, ts: parseCarimboDateTime(row.data_emissao)?.getTime() ?? 0 }))
-        .filter((item) => item.ts > 0)
-        .sort((a, b) => b.ts - a.ts);
-
-      if (sortedByCarimbo.length > 0) {
-        const latestTs = sortedByCarimbo[0].ts;
-        const previousTs = lastSeenCarimboMsRef.current;
-        const newRows = previousTs
-          ? sortedByCarimbo.filter((item) => item.ts > previousTs).map((item) => item.row)
-          : [];
-        const recentRowsOnLogin =
-          !previousTs && !silent
-            ? sortedByCarimbo
-                .filter((item) => latestTs - item.ts <= RECENT_WINDOW_MS)
-                .map((item) => item.row)
-            : [];
-
-        if (!previousTs && !silent && recentRowsOnLogin.length > 0) {
-          setNotifications(
-            recentRowsOnLogin.map((row) => {
-              const rowTs = parseCarimboDateTime(row.data_emissao)?.getTime() ?? Date.now();
-              return {
-                id: `${rowTs}-${row.doc_id || row.nome || "carta"}`,
-                title: "Carta recente",
-                body: `Nome: ${row.nome || "-"} | Origem: ${row.igreja_origem || "-"} | Destino: ${row.igreja_destino || "-"}`,
-                ts: rowTs,
-              };
-            })
-          );
-        }
-
-        if (initializedKeysRef.current && newRows.length > 0) {
-          const latest = newRows[0];
-          const latestTs = parseCarimboDateTime(latest.data_emissao)?.getTime() ?? 0;
-          const nowTs = Date.now();
-          if (
-            latestTs &&
-            nowTs - latestTs <= NOTIFY_WINDOW_MS &&
-            latestTs <= nowTs &&
-            (lastNotifiedTsRef.current == null || latestTs > lastNotifiedTsRef.current)
-          ) {
-            const title = newRows.length === 1 ? "Nova carta cadastrada" : `${newRows.length} novas cartas cadastradas`;
-            const body = `Nome: ${latest.nome || "-"} | Origem: ${latest.igreja_origem || "-"} | Destino: ${latest.igreja_destino || "-"}`;
-            setNotifications((prev) => [
-              { id: `${Date.now()}-${latest.doc_id || latest.nome || "carta"}`, title, body, ts: Date.now() },
-              ...prev,
-            ]);
-            lastNotifiedTsRef.current = latestTs;
-          }
-        }
-
-        // Sem toast no login. Notificacoes ficam apenas no sininho.
-
-        lastSeenCarimboMsRef.current = latestTs;
-      }
-      if (!initializedKeysRef.current) initializedKeysRef.current = true;
-
-      setCartas(cartasData);
-      setObreiros(obreirosData);
-
-      if (sortedByCarimbo.length > 0) {
-        const cacheRows = sortedByCarimbo.slice(0, 15).map((item) => item.row);
-        upsertClientCache(cacheRows);
-      }
-
-      // Fetch "Respostas ao formulário 3" for send status
-      const fetchSendStatus = async () => {
-        const sheets = ["Respostas ao formulário 3", "Respostas ao Formulário 3", "Respostas do formulário 3"];
-        for (const sheet of sheets) {
-          try {
-            const raw = await fetchSheetData(id, sheet);
-            if (raw.length === 0) continue;
-            const nextMap: Record<string, string> = {};
-            raw.forEach((row) => {
-              const idValue = (row.ID || row.id || row["__col_B"] || "").toString().trim();
-              const statusValue = (row.status_enviados || row.status || row["__col_C"] || "").toString().trim();
-              if (idValue) nextMap[idValue] = statusValue;
-            });
-            setSendStatusById(nextMap);
-            return;
-          } catch {
-            // try next
-          }
-        }
-        setSendStatusById({});
-      };
-
-      fetchSendStatus();
-
-      setHasObreiros(obOk);
-      setCartasSheetUsed(usedSheet);
+      setCartas(nextCartas);
+      setObreiros(nextObreiros);
+      setChurches(churches);
+      setNotifications(nextNotifications);
+      setSendStatusById({});
+      setHasObreiros(nextObreiros.length > 0);
+      setCartasSheetUsed("letters");
       setConnected(true);
       setOffline(false);
       setLastSyncAt(Date.now());
-
-      if (!silent) {
-        localStorage.setItem(STORAGE_KEY, inputUrl);
-        if (sheetName?.trim()) localStorage.setItem(STORAGE_SHEET_KEY, sheetName.trim());
-        setUrl(inputUrl);
-      }
-    } catch (err: any) {
-      logClientError(err?.message || "Erro ao conectar à planilha.", "connect");
-      let usedCache = false;
-      if (!silent) {
-        const cached = await fetchClientCache();
-        if (cached && cached.length > 0) {
-          setCartas(cached);
-          usedCache = true;
-        }
-      }
-      if (!silent) {
-        setError(err.message || "Erro ao conectar à planilha.");
-        setConnected(usedCache);
-        setOffline(usedCache);
-      }
+    } catch (err) {
+      setCartas([]);
+      setObreiros([]);
+      setChurches([]);
+      setNotifications([]);
+      setError(err instanceof Error ? err.message : "Erro ao carregar painel.");
+      setOffline(false);
     } finally {
-      if (!silent) setLoading(false);
-      syncInFlightRef.current = false;
+      setLoading(false);
     }
+  }, []);
+
+  const connect = useCallback(async (_inputUrl?: string, _sheetName?: string, _options?: { silent?: boolean }) => {
+    await refresh();
+  }, [refresh]);
+
+  const clearNotifications = useCallback(() => {
+    // Comentario: por enquanto limpamos so o estado local do sino.
+    // Se voce quiser depois, a gente liga isso a uma function de marcar lida.
+    setNotifications([]);
   }, []);
 
   const disconnect = useCallback(() => {
-    setCartas([]);
-    setObreiros([]);
+      setCartas([]);
+      setObreiros([]);
+      setChurches([]);
+      setNotifications([]);
     setConnected(false);
     setHasObreiros(false);
     setUrl("");
-    initializedKeysRef.current = false;
-    syncInFlightRef.current = false;
-    lastSeenCarimboMsRef.current = null;
-    localStorage.removeItem(STORAGE_KEY);
+    setError(null);
   }, []);
 
-  // Auto-connect on mount
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    const savedSheet = localStorage.getItem(STORAGE_SHEET_KEY);
-    if (saved) {
-      connect(saved, savedSheet || undefined);
-    }
-  }, [connect]);
+    void refresh();
+  }, [refresh]);
 
   useEffect(() => {
-    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notifications));
-  }, [notifications]);
-
-  useEffect(() => {
-    if (!connected || !url) return;
+    if (!connected) return;
 
     const intervalId = window.setInterval(() => {
-      connect(url, customSheetName || undefined, { silent: true });
+      void refresh();
     }, REFRESH_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
-  }, [connected, url, customSheetName, connect]);
+  }, [connected, refresh]);
 
   return {
     url,
@@ -500,10 +316,8 @@ export function useSheetData() {
     hasObreiros,
     cartasSheetUsed,
     notifications,
-    clearNotifications: () => {
-      setNotifications([]);
-      localStorage.removeItem(NOTIFICATIONS_STORAGE_KEY);
-    },
+    churches,
+    clearNotifications,
     sendStatusById,
     offline,
     lastSyncAt,

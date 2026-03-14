@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, Building2, CalendarDays, FileText, Loader2, LogOut, Phone, Save, Search, TrendingUp, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,17 +10,16 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
+import { getSupabaseRestHeaders } from "@/lib/supabaseHeaders";
+import { clearAppSession, getAppToken } from "@/lib/appSession";
+import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
-const LETTER_CREATE_WEBHOOK_URL = (
-  import.meta.env.VITE_CARTAS_CREATE_WEBHOOK_URL || "https://n8n-n8n.ynlng8.easypanel.host/webhook/carta-pregacao"
-).trim();
+const CREATE_LETTER_FUNCTION_NAME = (import.meta.env.VITE_CREATE_LETTER_FUNCTION_NAME || "create-letter").trim();
+const OPEN_LETTER_FUNCTION_NAME = (import.meta.env.VITE_OPEN_LETTER_FUNCTION_NAME || "letter").trim();
 const CACHE_REFRESH_MS = 30000;
-const OBREIRO_NOTIFICATIONS_KEY = "obreiro_notifications";
-
 const ministerialOptions = ["Membro", "Cooperador", "Di\u00e1cono", "Presb\u00edtero", "Pastor"];
 
 type ObreiroProfile = {
@@ -56,6 +55,7 @@ type ClientConfig = {
   assinatura_url: string;
   carimbo_igreja_url: string;
   carimbo_pastor_url: string;
+  church_class: string;
 };
 
 type LetterFormState = {
@@ -98,6 +98,7 @@ const emptyClientConfig: ClientConfig = {
   assinatura_url: "",
   carimbo_igreja_url: "",
   carimbo_pastor_url: "",
+  church_class: "",
 };
 
 const emptyLetterForm: LetterFormState = {
@@ -133,6 +134,12 @@ const parseBrDateToDate = (value: string) => {
 };
 
 const getCartaStatus = (row: CartaRow, profile: ObreiroProfile) => {
+  const backendStatus = String(row.status || "").trim().toUpperCase();
+  if (backendStatus === "ENVIADA") return "Carta enviada";
+  if (backendStatus === "LIBERADA") return "Carta liberada";
+  if (backendStatus === "AGUARDANDO_LIBERACAO") return "Aguardando liberacao";
+  if (backendStatus === "BLOQUEADO") return "Bloqueado";
+
   const statusUsuario = String(profile.status || row.status_usuario || row["Status Usuario"] || "").trim().toUpperCase();
   const statusCarta = String(row.status_carta || row.statusCarta || row["Status Carta"] || "").trim().toUpperCase();
   const envio = String(row.envio || row["Envio"] || "").trim().toUpperCase();
@@ -156,11 +163,12 @@ const getCartaStatusClass = (label: string) => {
 
 export default function Obreiro() {
   const navigate = useNavigate();
-  const clientId = (localStorage.getItem("clientId") || "").trim();
+  const userId = (localStorage.getItem("user_id") || "").trim();
   const phone = normalizePhone(localStorage.getItem("obreiro_telefone") || "");
   const churchName = (localStorage.getItem("church_name") || "").trim();
   const pastorName = (localStorage.getItem("pastor_name") || "").trim();
   const originTotvs = (localStorage.getItem("totvs_church_id") || "").trim();
+  const authToken = getAppToken();
 
   const [profile, setProfile] = useState<ObreiroProfile>(() => ({
     ...emptyProfile,
@@ -199,15 +207,7 @@ export default function Obreiro() {
   const [cardsStatusFilter, setCardsStatusFilter] = useState("all");
   const [cardsDateStart, setCardsDateStart] = useState("");
   const [cardsDateEnd, setCardsDateEnd] = useState("");
-  const [notifications, setNotifications] = useState<ObreiroNotification[]>(() => {
-    try {
-      const raw = localStorage.getItem(OBREIRO_NOTIFICATIONS_KEY);
-      return raw ? (JSON.parse(raw) as ObreiroNotification[]) : [];
-    } catch {
-      return [];
-    }
-  });
-  const previousCardStateRef = useRef<Map<string, string>>(new Map());
+  const [notifications, setNotifications] = useState<ObreiroNotification[]>([]);
 
   const blocked = useMemo(() => isBlockedStatusValue(profile.status), [profile.status]);
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -218,17 +218,19 @@ export default function Obreiro() {
   }, []);
 
   const loadProfile = async () => {
-    if (!clientId || !phone || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+    if (!userId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
 
     const params = new URLSearchParams({
-      select: "id,nome,telefone,email,status,status_carta,data_nascimento,data_ordenacao,cargo_ministerial,cep,endereco,numero,complemento,bairro,cidade,uf",
+      select:
+        "id,full_name,phone,email,is_active,can_create_released_letter,birth_date,ordination_date,minister_role,cep,address_street,address_number,address_complement,address_neighborhood,address_city,address_state",
       limit: "1",
     });
-    params.set("client_id", `eq.${clientId}`);
-    params.set("telefone", `eq.${phone}`);
+    params.set("id", `eq.${userId}`);
 
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${params.toString()}`, {
-      headers: getSupabaseHeaders({ json: false }),
+    // Comentario: a leitura via REST agora usa o `rls_token`.
+    // Assim o banco aplica as policies novas por role/escopo.
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/users?${params.toString()}`, {
+      headers: getSupabaseRestHeaders({ json: false }),
     });
     if (!response.ok) return;
 
@@ -238,21 +240,21 @@ export default function Obreiro() {
 
     const nextProfile: ObreiroProfile = {
       id: String(row.id || "").trim(),
-      nome: String(row.nome || "").trim(),
-      telefone: normalizePhone(String(row.telefone || "")),
+      nome: String(row.full_name || "").trim(),
+      telefone: normalizePhone(String(row.phone || "")),
       email: String(row.email || "").trim(),
-      status: String(row.status || "").trim(),
-      status_carta: String(row.status_carta || "").trim(),
-      data_nascimento: String(row.data_nascimento || "").trim(),
-      data_ordenacao: String(row.data_ordenacao || "").trim(),
-      cargo_ministerial: String(row.cargo_ministerial || "").trim(),
+      status: row.is_active === false ? "BLOQUEADO" : "AUTORIZADO",
+      status_carta: row.can_create_released_letter === true ? "LIBERADA" : "GERADA",
+      data_nascimento: String(row.birth_date || "").trim(),
+      data_ordenacao: String(row.ordination_date || "").trim(),
+      cargo_ministerial: String(row.minister_role || "").trim(),
       cep: String(row.cep || "").trim(),
-      endereco: String(row.endereco || "").trim(),
-      numero: String(row.numero || "").trim(),
-      complemento: String(row.complemento || "").trim(),
-      bairro: String(row.bairro || "").trim(),
-      cidade: String(row.cidade || "").trim(),
-      uf: String(row.uf || "").trim(),
+      endereco: String(row.address_street || "").trim(),
+      numero: String(row.address_number || "").trim(),
+      complemento: String(row.address_complement || "").trim(),
+      bairro: String(row.address_neighborhood || "").trim(),
+      cidade: String(row.address_city || "").trim(),
+      uf: String(row.address_state || "").trim(),
     };
 
     setProfile(nextProfile);
@@ -273,16 +275,16 @@ export default function Obreiro() {
   };
 
   const loadClientConfig = async () => {
-    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+    if (!originTotvs || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
 
     const params = new URLSearchParams({
-      select: "church_name,pastor_name,pastor_phone,assinatura_url,carimbo_igreja_url,carimbo_pastor_url",
+      select: "totvs_id,church_name,class,stamp_church_url",
       limit: "1",
     });
-    params.set("id", `eq.${clientId}`);
+    params.set("totvs_id", `eq.${originTotvs}`);
 
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/clients?${params.toString()}`, {
-      headers: getSupabaseHeaders({ json: false }),
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/churches?${params.toString()}`, {
+      headers: getSupabaseRestHeaders({ json: false }),
     });
     if (!response.ok) return;
 
@@ -292,11 +294,14 @@ export default function Obreiro() {
 
     const nextConfig: ClientConfig = {
       church_name: String(row.church_name || churchName || "").trim(),
-      pastor_name: String(row.pastor_name || pastorName || "").trim(),
-      pastor_phone: String(row.pastor_phone || "").trim(),
-      assinatura_url: String(row.assinatura_url || "").trim(),
-      carimbo_igreja_url: String(row.carimbo_igreja_url || "").trim(),
-      carimbo_pastor_url: String(row.carimbo_pastor_url || "").trim(),
+      // Comentario: o obreiro nao tem mais leitura livre do cadastro do pastor.
+      // O backend resolve o assinante final da carta pela hierarquia.
+      pastor_name: pastorName || "Resolvido pela hierarquia",
+      pastor_phone: "",
+      assinatura_url: "",
+      carimbo_igreja_url: String(row.stamp_church_url || "").trim(),
+      carimbo_pastor_url: "",
+      church_class: String(row.class || "").trim(),
     };
 
     setClientConfig(nextConfig);
@@ -309,85 +314,79 @@ export default function Obreiro() {
   };
 
   const loadDestinationOptions = async () => {
-    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-
-    const params = new URLSearchParams({
-      select: "totvs_church_id,church_name,parent_totvs_church_id,is_active",
-      limit: "500",
-    });
-    params.set("client_id", `eq.${clientId}`);
-    params.set("is_active", "eq.true");
-
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/client_churches?${params.toString()}`, {
-      headers: getSupabaseHeaders({ json: false }),
-    });
-    if (!response.ok) return;
-
-    const payload = (await response.json().catch(() => [])) as Array<{
-      totvs_church_id?: string | null;
-      church_name?: string | null;
-      parent_totvs_church_id?: string | null;
-      is_active?: boolean | null;
-    }>;
-
-    const options = payload
-      .filter((row) => row.is_active !== false)
-      .map((row) => ({
-        totvs_church_id: String(row.totvs_church_id || "").trim(),
-        church_name: String(row.church_name || "").trim(),
-      }))
-      .filter((row) => row.totvs_church_id && row.church_name && row.church_name !== (clientConfig.church_name || churchName))
-      .sort((a, b) => a.church_name.localeCompare(b.church_name, "pt-BR"));
-
-    const uniqueOptions = Array.from(new Map(options.map((item) => [item.totvs_church_id, item])).values());
-    setDestinationOptions(uniqueOptions);
+    // Comentario: com as RLS novas, o obreiro nao enxerga o escopo inteiro de igrejas.
+    // A validacao final de destino passa a acontecer na function de criar carta.
+    setDestinationOptions([]);
   };
 
   const loadCards = async () => {
-    if (!clientId || !phone || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
 
     const params = new URLSearchParams({
       select:
-        "id,doc_id,doc_url,pdf_url,nome,telefone,email,ministerial,igreja_origem,igreja_destino,dia_pregacao,data_emissao,status_usuario,status_carta,envio,drive_status,created_at",
+        "id,doc_id,pdf_url,url_carta,preacher_name,preacher_phone,email,minister_role,church_origin,church_destination,preach_date,created_at,status,flow_type",
       limit: "100",
       order: "created_at.desc",
     });
-    params.set("client_id", `eq.${clientId}`);
-    params.set("telefone", `eq.${phone}`);
 
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/client_letters?${params.toString()}`, {
-      headers: getSupabaseHeaders({ json: false }),
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/letters?${params.toString()}`, {
+      headers: getSupabaseRestHeaders({ json: false }),
     });
     if (!response.ok) return;
 
     const payload = (await response.json().catch(() => [])) as Array<Record<string, string | null>>;
-    const rows = payload.map((row) => ({
+      const rows = payload.map((row) => ({
       id: String(row.id || "").trim(),
       doc_id: String(row.doc_id || "").trim(),
-      doc_url: String(row.doc_url || "").trim(),
-      pdf_url: String(row.pdf_url || "").trim(),
-      nome: String(row.nome || "").trim(),
-      telefone: normalizePhone(String(row.telefone || "")),
+      doc_url: String(row.url_carta || "").trim(),
+      pdf_url: String(row.pdf_url || row.url_carta || "").trim(),
+      nome: String(row.preacher_name || "").trim(),
+      telefone: normalizePhone(String(row.preacher_phone || row.phone || "")),
       email: String(row.email || "").trim(),
-      ministerial: String(row.ministerial || "").trim(),
-      igreja_origem: String(row.igreja_origem || "").trim(),
-      igreja_destino: String(row.igreja_destino || "").trim(),
-      data_pregacao: String(row.dia_pregacao || "").trim(),
-      data_emissao: String(row.data_emissao || "").trim(),
-      status_usuario: String(row.status_usuario || "").trim(),
-      status_carta: String(row.status_carta || "").trim(),
-      envio: String(row.envio || "").trim(),
-      drive_status: String(row.drive_status || "").trim(),
+      ministerial: String(row.minister_role || "").trim(),
+      igreja_origem: String(row.church_origin || "").trim(),
+      igreja_destino: String(row.church_destination || "").trim(),
+      data_pregacao: formatDateBr(String(row.preach_date || "").trim()),
+      data_emissao: formatDateBr(String(row.created_at || "").trim().slice(0, 10)),
+      status: String(row.status || "").trim(),
+      status_usuario: profile.status || "",
+      status_carta: String(row.status || "").trim(),
+      envio: "",
+      drive_status: "",
       created_at: String(row.created_at || "").trim(),
     }));
 
     setCards(rows);
   };
 
+  const loadNotifications = async () => {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+
+    const params = new URLSearchParams({
+      select: "id,title,message,created_at",
+      order: "created_at.desc",
+      limit: "20",
+    });
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/notifications?${params.toString()}`, {
+      headers: getSupabaseRestHeaders({ json: false }),
+    });
+    if (!response.ok) return;
+
+    const payload = (await response.json().catch(() => [])) as Array<Record<string, string | null>>;
+    const nextNotifications = payload.map((row) => ({
+      id: String(row.id || "").trim(),
+      title: String(row.title || "Notificacao").trim(),
+      body: String(row.message || "").trim(),
+      ts: new Date(String(row.created_at || "").trim() || Date.now()).getTime(),
+    }));
+    setNotifications(nextNotifications);
+  };
+
   const refreshPage = async () => {
     setLoading(true);
     try {
-      await Promise.all([loadProfile(), loadClientConfig(), loadDestinationOptions(), loadCards()]);
+      await Promise.all([loadProfile(), loadClientConfig(), loadDestinationOptions(), loadCards(), loadNotifications()]);
     } finally {
       setLoading(false);
     }
@@ -395,15 +394,15 @@ export default function Obreiro() {
 
   useEffect(() => {
     void refreshPage();
-  }, [clientId, phone]);
+  }, [userId, originTotvs]);
 
   useEffect(() => {
-    if (!clientId || !phone) return;
+    if (!userId) return;
     const id = window.setInterval(() => {
-      void Promise.all([loadProfile(), loadClientConfig(), loadDestinationOptions(), loadCards()]);
+      void Promise.all([loadProfile(), loadClientConfig(), loadDestinationOptions(), loadCards(), loadNotifications()]);
     }, CACHE_REFRESH_MS);
     return () => window.clearInterval(id);
-  }, [clientId, phone, profile.status_carta]);
+  }, [userId, originTotvs, profile.status_carta]);
 
   const selectedDestination = useMemo(() => {
     const typed = String(letterForm.igreja_destino || "").trim().toUpperCase();
@@ -456,116 +455,37 @@ export default function Obreiro() {
 
   const clearNotifications = () => {
     setNotifications([]);
-    localStorage.setItem(OBREIRO_NOTIFICATIONS_KEY, JSON.stringify([]));
   };
 
-  useEffect(() => {
-    localStorage.setItem(OBREIRO_NOTIFICATIONS_KEY, JSON.stringify(notifications));
-  }, [notifications]);
-
-  useEffect(() => {
-    if (!cards.length) return;
-
-    const previousMap = previousCardStateRef.current;
-    const nextMap = new Map<string, string>();
-    const nextNotifications: ObreiroNotification[] = [];
-
-    cards.forEach((row) => {
-      const key = String(row.id || row.doc_id || `${row.nome}-${row.data_emissao}`).trim();
-      const status = getCartaStatus(row, profile);
-      const signature = `${status}|${row.doc_id || ""}|${row.pdf_url || row.doc_url || ""}`;
-      nextMap.set(key, signature);
-
-      if (!previousMap.size) return;
-
-      const previousSignature = previousMap.get(key);
-      if (!previousSignature) {
-        nextNotifications.push({
-          id: `${Date.now()}-${key}-nova`,
-          title: "Carta nova",
-          body: `${row.igreja_destino || "Destino"} cadastrada para ${row.nome || "obreiro"}.`,
-          ts: Date.now(),
-        });
-        return;
-      }
-
-      const previousStatus = previousSignature.split("|")[0];
-      if (previousStatus !== status) {
-        const title =
-          status === "Carta liberada"
-            ? "Carta liberada"
-            : status === "Carta enviada"
-              ? "Carta enviada"
-              : status === "Liberacao automatica"
-                ? "Liberacao automatica"
-                : "";
-
-        if (title) {
-          nextNotifications.push({
-            id: `${Date.now()}-${key}-${status}`,
-            title,
-            body: `${row.igreja_destino || "Destino"} agora esta com status ${status}.`,
-            ts: Date.now(),
-          });
-        }
-      }
-    });
-
-    previousCardStateRef.current = nextMap;
-
-    if (nextNotifications.length) {
-      setNotifications((prev) => [...nextNotifications, ...prev].slice(0, 20));
-    }
-  }, [cards, profile]);
-
   const handleSaveProfile = async () => {
-    if (!clientId || !phone || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    if (!authToken) {
       toast.error("Sessao do obreiro nao encontrada.");
       return;
     }
 
     setSaving(true);
     try {
-      const params = new URLSearchParams({ select: "id", limit: "1" });
-      params.set("client_id", `eq.${clientId}`);
-      params.set("telefone", `eq.${phone}`);
-
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${params.toString()}`, {
-        headers: getSupabaseHeaders({ json: false }),
-      });
-
-      if (!response.ok) throw new Error("Nao foi possivel localizar o cadastro do obreiro.");
-
-      const payload = (await response.json().catch(() => [])) as Array<{ id?: string }>;
-      const id = String(payload?.[0]?.id || profile.id || "").trim();
-      if (!id) throw new Error("Cadastro do obreiro nao encontrado.");
-
-      const updateParams = new URLSearchParams({ select: "id" });
-      updateParams.set("id", `eq.${id}`);
-
-      const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${updateParams.toString()}`, {
-        method: "PATCH",
-        headers: {
-          ...getSupabaseHeaders(),
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify({
-          nome: profile.nome.trim() || null,
-          email: profile.email.trim() || null,
-          data_nascimento: profile.data_nascimento.trim() || null,
-          data_ordenacao: profile.data_ordenacao.trim() || null,
-          cargo_ministerial: profile.cargo_ministerial.trim() || null,
+      const { data, error } = await supabase.functions.invoke<{
+        ok?: boolean;
+        error?: string;
+      }>("save-my-profile", {
+        body: {
+          full_name: profile.nome.trim(),
+          phone: profile.telefone.trim(),
+          email: profile.email.trim(),
+          birth_date: profile.data_nascimento.trim() || null,
+          ordination_date: profile.data_ordenacao.trim() || null,
+          minister_role: profile.cargo_ministerial.trim() || null,
           cep: profile.cep.trim() || null,
-          endereco: profile.endereco.trim() || null,
-          numero: profile.numero.trim() || null,
-          complemento: profile.complemento.trim() || null,
-          bairro: profile.bairro.trim() || null,
-          cidade: profile.cidade.trim() || null,
-          uf: profile.uf.trim() || null,
-        }),
+          address_street: profile.endereco.trim() || null,
+          address_number: profile.numero.trim() || null,
+          address_complement: profile.complemento.trim() || null,
+          address_neighborhood: profile.bairro.trim() || null,
+          address_city: profile.cidade.trim() || null,
+          address_state: profile.uf.trim() || null,
+        },
       });
-
-      if (!updateRes.ok) throw new Error("Nao foi possivel atualizar o cadastro.");
+      if (error || !data?.ok) throw new Error(data?.error || error?.message || "Nao foi possivel atualizar o cadastro.");
 
       toast.success("Cadastro atualizado com sucesso.");
       await loadProfile();
@@ -590,103 +510,18 @@ export default function Obreiro() {
   };
 
   const buildLetterPayload = () => ({
-    client_id: clientId,
-    obreiro_id: profile.id,
-    nome: profile.nome,
-    telefone: profile.telefone,
-    igreja_origem: clientConfig.church_name || churchName,
-    origem: clientConfig.church_name || churchName,
-    igreja_destino: (letterForm.igreja_destino || letterForm.igreja_destino_manual).trim(),
-    destino: (letterForm.igreja_destino || letterForm.igreja_destino_manual).trim(),
-    dia_pregacao: formatDateBr(letterForm.dia_pregacao),
-    data_emissao: formatDateBr(new Date().toISOString().slice(0, 10)),
-    origem_totvs: originTotvs || null,
-    destino_totvs: selectedDestination?.totvs_church_id || null,
-    origem_nome: clientConfig.church_name || churchName || null,
-    destino_nome: selectedDestination?.church_name || (letterForm.igreja_destino_manual.trim() || null),
-    email: profile.email || "",
-    email_pregador: profile.email || null,
-    ministerial: letterForm.ministerial || profile.cargo_ministerial,
-    data_separacao: formatDateBr(profile.data_ordenacao) || null,
-    data_da_separacao: formatDateBr(profile.data_ordenacao),
-    pastor_responsavel: clientConfig.pastor_name || pastorName || null,
-    telefone_pastor: clientConfig.pastor_phone || null,
-    assinatura_url: clientConfig.assinatura_url || null,
-    carimbo_igreja_url: clientConfig.carimbo_igreja_url || null,
-    carimbo_pastor_url: clientConfig.carimbo_pastor_url || null,
-    status_usuario: profile.status || "AUTORIZADO",
-    status_carta: profile.status_carta || "GERADA",
+    // Comentario: o backend novo completa os dados faltantes pela sessao,
+    // pela hierarquia da igreja e pelo pastor assinante resolvido.
+    preacher_name: profile.nome,
+    minister_role: letterForm.ministerial || profile.cargo_ministerial,
+    preach_date: letterForm.dia_pregacao,
+    preach_period: "NOITE",
+    church_origin: originTotvs ? `${originTotvs} ${clientConfig.church_name || churchName}`.trim() : clientConfig.church_name || churchName,
+    church_destination: (letterForm.igreja_destino || letterForm.igreja_destino_manual).trim(),
+    preacher_user_id: profile.id,
+    phone: profile.telefone,
+    email: profile.email || null,
   });
-
-  const createLetterRecord = async (payload: ReturnType<typeof buildLetterPayload>) => {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/client_letters`, {
-      method: "POST",
-      headers: {
-        ...getSupabaseHeaders(),
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        client_id: payload.client_id,
-        obreiro_id: payload.obreiro_id || null,
-        nome: payload.nome,
-        telefone: payload.telefone,
-        email: payload.email || null,
-        email_pregador: payload.email_pregador || null,
-        ministerial: payload.ministerial || null,
-        igreja_origem: payload.igreja_origem || null,
-        origem: payload.origem || null,
-        origem_totvs: payload.origem_totvs || null,
-        origem_nome: payload.origem_nome || null,
-        igreja_destino: payload.igreja_destino || null,
-        destino: payload.destino || null,
-        destino_totvs: payload.destino_totvs || null,
-        destino_nome: payload.destino_nome || null,
-        dia_pregacao: payload.dia_pregacao || null,
-        data_emissao: payload.data_emissao || null,
-        data_separacao: payload.data_separacao || null,
-        data_da_separacao: payload.data_da_separacao || null,
-        pastor_responsavel: payload.pastor_responsavel || null,
-        telefone_pastor: payload.telefone_pastor || null,
-        assinatura_url: payload.assinatura_url || null,
-        carimbo_igreja_url: payload.carimbo_igreja_url || null,
-        carimbo_pastor_url: payload.carimbo_pastor_url || null,
-        status_usuario: payload.status_usuario || "AUTORIZADO",
-        status_carta: payload.status_carta || "GERADA",
-        tipo_fluxo: String(profile.status_carta || "").trim().toUpperCase() === "LIBERADA" ? "automatico" : "manual",
-        webhook_action: "carta-pregacao",
-        raw_payload: payload,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Nao foi possivel salvar a carta no banco.");
-    }
-
-    const rows = (await response.json().catch(() => [])) as Array<{ id?: string }>;
-    return String(rows?.[0]?.id || "").trim() || null;
-  };
-
-  const updateLetterRecord = async (letterId: string, data: Record<string, unknown>) => {
-    if (!letterId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-
-    const params = new URLSearchParams({ select: "id" });
-    params.set("id", `eq.${letterId}`);
-
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/client_letters?${params.toString()}`, {
-      method: "PATCH",
-      headers: {
-        ...getSupabaseHeaders(),
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      throw new Error("Nao foi possivel atualizar a carta no banco.");
-    }
-  };
 
   const handleCreateLetter = async () => {
     const igrejaDestinoFinal = (letterForm.igreja_destino || letterForm.igreja_destino_manual).trim();
@@ -701,37 +536,24 @@ export default function Obreiro() {
 
     const payload = buildLetterPayload();
 
-    if (!LETTER_CREATE_WEBHOOK_URL) {
-      toast.success("Payload da carta montado com sucesso.");
+    if (!CREATE_LETTER_FUNCTION_NAME) {
+      toast.error("Function de criar carta nao configurada.");
       return;
     }
 
     setCreatingLetter(true);
     try {
-      const letterId = await createLetterRecord(payload);
-
-      const response = await fetch(LETTER_CREATE_WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const { data, error } = await supabase.functions.invoke<{
+        ok?: boolean;
+        error?: string;
+      }>(CREATE_LETTER_FUNCTION_NAME, {
+        body: payload,
       });
-
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || result?.ok === false) {
-        throw new Error(String(result?.error || result?.message || "Nao foi possivel enviar a carta.").trim());
-      }
-
-      if (letterId) {
-        await updateLetterRecord(letterId, {
-          doc_id: String(result?.docId || result?.doc_id || "").trim() || null,
-          doc_url: String(result?.docUrl || result?.doc_url || "").trim() || null,
-          pdf_url: String(result?.pdfUrl || result?.pdf_url || "").trim() || null,
-        });
-      }
+      if (error || !data?.ok) throw new Error(data?.error || error?.message || "Nao foi possivel enviar a carta.");
 
       toast.success("Carta enviada");
       setCreateOpen(false);
-      await loadCards();
+      await Promise.all([loadCards(), loadNotifications()]);
     } catch (err: any) {
       toast.error(err?.message || "Nao foi possivel enviar a carta.");
     } finally {
@@ -740,34 +562,31 @@ export default function Obreiro() {
   };
 
   const handleLogout = () => {
-    [
-      "session_key",
-      "clientId",
-      "church_name",
-      "pastor_name",
-      "google_sheet_url",
-      "google_form_url",
-      "google_block_form_url",
-      "google_form_url_folder",
-      "needs_admin_setup",
-      "sheets_dashboard_url",
-      "user_role",
-      "obreiro_nome",
-      "obreiro_telefone",
-      "obreiro_status",
-      "obreiro_email",
-      "obreiro_data_nascimento",
-      "obreiro_data_ordenacao",
-      "obreiro_cargo_ministerial",
-      "obreiro_cep",
-      "obreiro_endereco",
-      "obreiro_numero",
-      "obreiro_complemento",
-      "obreiro_bairro",
-      "obreiro_cidade",
-      "obreiro_uf",
-    ].forEach((k) => localStorage.removeItem(k));
+    clearAppSession();
     navigate("/login", { replace: true });
+  };
+
+  const handleOpenLetter = async (row: CartaRow) => {
+    const directUrl = String(row.pdf_url || row.doc_url || "").trim();
+    if (directUrl) {
+      window.open(directUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    const { data, error } = await supabase.functions.invoke<{
+      ok?: boolean;
+      error?: string;
+      url?: string;
+    }>(OPEN_LETTER_FUNCTION_NAME, {
+      body: { letter_id: row.id },
+    });
+
+    if (error || !data?.ok || !data.url) {
+      toast.error(data?.error || error?.message || "Nao foi possivel abrir o PDF.");
+      return;
+    }
+
+    window.open(data.url, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -892,7 +711,7 @@ export default function Obreiro() {
             <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg">Minhas cartas</CardTitle>
-                <CardDescription>As cartas sao filtradas pelo seu client_id e telefone.</CardDescription>
+                <CardDescription>As cartas agora sao lidas da tabela `letters` com as regras de acesso do banco novo.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="overflow-x-auto">
@@ -954,8 +773,6 @@ export default function Obreiro() {
                       <tbody>
                         {filteredCards.map((row, index) => {
                           const statusLabel = getCartaStatus(row, profile);
-                          const pdfUrl = String(row.pdf_url || row.url_pdf || row.pdfUrl || row.doc_url || "").trim();
-
                           return (
                             <tr key={`${row.id || row.doc_id || row.nome || "carta"}-${index}`} className="border-t">
                               <td className="px-4 py-3 font-medium text-foreground">{row.igreja_destino || row.ipda_destino || "Destino nao informado"}</td>
@@ -971,8 +788,7 @@ export default function Obreiro() {
                                 <Button
                                   type="button"
                                   className="bg-emerald-600 text-white hover:bg-emerald-700"
-                                  onClick={() => pdfUrl && window.open(pdfUrl, "_blank", "noopener,noreferrer")}
-                                  disabled={!pdfUrl}
+                                  onClick={() => void handleOpenLetter(row)}
                                 >
                                   Abrir PDF
                                 </Button>
@@ -1115,7 +931,7 @@ export default function Obreiro() {
                           igreja_destino_manual: "",
                         }))
                       }
-                      placeholder={destinationOptions.length ? "Digite o TOTVS ou nome da igreja" : "Sem igrejas cadastradas na tabela"}
+                      placeholder={destinationOptions.length ? "Digite o TOTVS ou nome da igreja" : "Digite o TOTVS ou nome da igreja destino"}
                       disabled={!!letterForm.igreja_destino_manual.trim()}
                       className="pl-10"
                     />
@@ -1191,12 +1007,12 @@ export default function Obreiro() {
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Pastor responsavel da igreja</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Assinatura responsavel</p>
                   <div className="space-y-2 text-slate-900">
-                    <div className="text-base font-semibold sm:text-lg">{clientConfig.pastor_name || pastorName || "Nao informado"}</div>
+                    <div className="text-base font-semibold sm:text-lg">{clientConfig.pastor_name || "Resolvido pela hierarquia"}</div>
                     <div className="flex items-center gap-2 text-slate-600">
                       <Phone className="h-4 w-4 text-slate-400" />
-                      <span>{clientConfig.pastor_phone || "-"}</span>
+                      <span>{clientConfig.pastor_phone || "Definido na liberacao/geracao da carta"}</span>
                     </div>
                   </div>
                 </div>

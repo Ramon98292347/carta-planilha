@@ -14,9 +14,12 @@ const functions = {
     }
 
     try {
+      // Comentario: usamos o token salvo no login novo quando existir.
+      // Isso permite chamar edge functions protegidas por JWT da aplicacao.
+      const authToken = (localStorage.getItem("app_token") || localStorage.getItem("session_key") || "").trim();
       const response = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, {
         method: "POST",
-        headers: getSupabaseHeaders(),
+        headers: getSupabaseHeaders({ authToken }),
         body: JSON.stringify(options?.body ?? {}),
       });
 

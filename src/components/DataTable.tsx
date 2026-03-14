@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -75,6 +75,13 @@ interface DetailField {
   label: string;
 }
 
+interface RowActionItem {
+  label: string;
+  onClick: () => void | Promise<void>;
+  disabled?: boolean;
+  destructive?: boolean;
+}
+
 interface Props {
   data: Record<string, string>[];
   columns: Column[];
@@ -89,6 +96,7 @@ interface Props {
   detailRowResolver?: (row: Record<string, string>) => Record<string, string>;
   sendStatusById?: Record<string, string>;
   onRefetchCache?: () => Promise<void> | void;
+  rowActions?: (row: Record<string, string>) => RowActionItem[];
 }
 
 export function DataTable({
@@ -105,6 +113,7 @@ export function DataTable({
   detailRowResolver,
   sendStatusById = {},
   onRefetchCache,
+  rowActions,
 }: Props) {
   const [page, setPage] = useState(0);
   const [detailRow, setDetailRow] = useState<Record<string, string> | null>(null);
@@ -115,6 +124,7 @@ export function DataTable({
   const autoSentDocIdsRef = useRef<Set<string>>(new Set());
   const seenDocIdsRef = useRef<Set<string>>(new Set());
   const autoSendTimersRef = useRef<Record<string, number>>({});
+  const useLegacyLetterActions = actionsVariant === "full";
 
   const getAutoSentStorageKey = () => {
     const clientId = (localStorage.getItem("clientId") || "").trim();
@@ -146,7 +156,7 @@ export function DataTable({
   const totalPages = Math.ceil(data.length / PAGE_SIZE);
   const pageData = data.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  const isEmptyValue = (value?: string) => !value || value === "-" || value === "â€”" || value === EMPTY;
+  const isEmptyValue = (value?: string) => !value || value === "-" || value === EMPTY;
 
   const visibleColumns = hideEmptyColumns
     ? columns.filter((c) => data.some((row) => !isEmptyValue(row[c.key])))
@@ -187,7 +197,7 @@ export function DataTable({
       (localStorage.getItem("google_sheet_url") || "").trim();
     const target = googleFormUrl || googleSheetUrl;
     if (!target) {
-      toast.error("Link de carta não configurado.");
+      toast.error("Link de carta nao configurado.");
       return;
     }
     const docId = (row.doc_id || "").trim();
@@ -250,12 +260,12 @@ export function DataTable({
   const getDocId = (row: Record<string, string>) =>
     (
       row.doc_id ||
-      row["Merged Doc ID - carta de prega��o"] ||
+      row["Merged Doc ID - carta de pregação"] ||
       row["Merged Doc ID - carta de pregacao"] ||
       row["Merged Doc ID - Cartas"] ||
       row["Merged Doc ID - cartas"] ||
       row["merged_doc_id_-_cartas"] ||
-      row["Merged Doc ID - Carta de Pregação"] ||
+      row["Merged Doc ID - Carta de Pregacao"] ||
       row["merged_doc_id_-_carta_de_pregacao"] ||
       ""
     ).trim();
@@ -272,6 +282,11 @@ export function DataTable({
     return { ...row, ...(byPhone || {}), ...(byDoc || {}) };
   };
 
+  const getRowActions = (row: Record<string, string>) => {
+    const currentRow = resolveRow(row);
+    return rowActions ? rowActions(currentRow) : [];
+  };
+
   const getStatusCarta = (row: Record<string, string>) => getStatusCartaVisual(row);
 
   const getEnvioStatus = (row: Record<string, string>) =>
@@ -283,9 +298,9 @@ export function DataTable({
       row.docUrl ||
       row["Doc URL"] ||
       row["doc_url"] ||
-      row["Merged Doc URL - carta de prega��o"] ||
+      row["Merged Doc URL - carta de pregação"] ||
       row["Merged Doc URL - carta de pregacao"] ||
-      row["Merged Doc URL - Carta de Pregação"] ||
+      row["Merged Doc URL - Carta de Pregacao"] ||
       row["Merged Doc URL - Cartas"] ||
       row["Merged Doc URL - cartas"] ||
       ""
@@ -297,12 +312,12 @@ export function DataTable({
       row.pdfUrl ||
       row.url_pdf ||
       row["PDF URL"] ||
-      row["Link to merged Doc - carta de prega��o"] ||
+      row["Link to merged Doc - carta de pregação"] ||
       row["Link to merged Doc - carta de pregacao"] ||
-      row["Merged Doc URL - Carta de Pregação"] ||
+      row["Merged Doc URL - Carta de Pregacao"] ||
       row["Merged Doc URL - Cartas"] ||
       row["Merged Doc URL - cartas"] ||
-      row["Link to merged Doc - Carta de Pregação"] ||
+      row["Link to merged Doc - Carta de Pregacao"] ||
       row["Link to merged Doc - Cartas"] ||
       row["Link to merged Doc - cartas"] ||
       ""
@@ -324,7 +339,7 @@ export function DataTable({
     church_name: (row.igreja_origem || row.church_name || "-").trim() || "-",
     church_destination: (row.igreja_destino || row.church_destination || "-").trim() || "-",
     preach_date: (row.data_pregacao || row.preach_date || "-").trim() || "-",
-    minister_role: (row.funcao || row["Função Ministerial ?"] || row.cargo || row.minister_role || "-").trim() || "-",
+    minister_role: (row.funcao || row["Funcao Ministerial ?"] || row.cargo || row.minister_role || "-").trim() || "-",
     statusCarta: "LIBERADA",
     liberadoPor,
   });
@@ -378,6 +393,7 @@ export function DataTable({
   };
 
   useEffect(() => {
+    if (!useLegacyLetterActions) return;
     let active = true;
 
     const syncBlockedFromObreirosAuth = async () => {
@@ -438,8 +454,9 @@ export function DataTable({
     return () => {
       active = false;
     };
-  }, [data]);
+  }, [data, useLegacyLetterActions]);
   useEffect(() => {
+    if (!useLegacyLetterActions) return;
     let active = true;
     fetchClientConfig().then((cfg) => {
       if (active) setClientConfig(cfg);
@@ -447,7 +464,7 @@ export function DataTable({
     return () => {
       active = false;
     };
-  }, []);
+  }, [useLegacyLetterActions]);
 
   const withTechnicalContext = (cfg: ClientLettersConfig, body: Record<string, string>) => ({
     gas_delete_url: cfg.gasDeleteUrl,
@@ -460,7 +477,7 @@ export function DataTable({
   const callLettersWebhook = async (body: Record<string, string>) => {
     const cfg = clientConfig || (await fetchClientConfig());
     if (!cfg) {
-      toast.error("Configuração da API da igreja não encontrada.");
+      toast.error("Configuracao da API da igreja nao encontrada.");
       return null;
     }
     if (!clientConfig) setClientConfig(cfg);
@@ -474,7 +491,7 @@ export function DataTable({
     try {
       payload = (await response.json()) as Record<string, any>;
     } catch {
-      throw new Error("Resposta inválida do webhook");
+      throw new Error("Resposta invalida do webhook");
     }
     if (!response.ok || !payload?.ok) {
       const message = (payload?.error || payload?.message || `Falha na API da igreja (${response.status})`).trim();
@@ -692,7 +709,7 @@ export function DataTable({
       toast.success((sendResult?.message || "Carta liberada com sucesso").trim());
       await onRefetchCache?.();
     } catch (err: any) {
-      toast.error(err?.message || "N?o foi poss?vel liberar a carta.");
+      toast.error(err?.message || "Nao foi possivel liberar a carta.");
     }
   };
 
@@ -725,7 +742,7 @@ export function DataTable({
       toast.success((result?.message || "Carta Enviada Com Sucesso").trim());
       await onRefetchCache?.();
     } catch (err: any) {
-      toast.error(err?.message || "N?o foi poss?vel marcar envio.");
+      toast.error(err?.message || "Nao foi possivel marcar envio.");
     }
   };
 
@@ -756,7 +773,7 @@ export function DataTable({
       });
       await onRefetchCache?.();
     } catch (err: any) {
-      toast.error(err?.message || "N?o foi poss?vel mover a carta.");
+      toast.error(err?.message || "Nao foi possivel mover a carta.");
     }
   };
 
@@ -905,7 +922,7 @@ export function DataTable({
     const docId = getDocId(resolveRow(row));
 
     if (!docId) {
-      toast.error("N?o foi poss?vel excluir. Tente novamente.");
+      toast.error("Nao foi possivel excluir. Tente novamente.");
       return;
     }
 
@@ -925,7 +942,7 @@ export function DataTable({
       onDeleteSuccess?.(row);
       await onRefetchCache?.();
     } catch (err: any) {
-      toast.error(err?.message || "N?o foi poss?vel excluir. Tente novamente.");
+      toast.error(err?.message || "Nao foi possivel excluir. Tente novamente.");
     } finally {
       setDeletingKey(null);
     }
@@ -969,14 +986,42 @@ export function DataTable({
                 )}
                 {showDetails && actionsVariant === "detailsOnly" && (
                   <div className="mt-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(resolveRow(row)) : resolveRow(row))}
-                      className="w-full text-xs border-sky-600 bg-sky-600 text-white hover:bg-sky-700"
-                    >
-                      <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
-                    </Button>
+                    {getRowActions(row).length === 0 ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(resolveRow(row)) : resolveRow(row))}
+                        className="w-full text-xs border-sky-600 bg-sky-600 text-white hover:bg-sky-700"
+                      >
+                        <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
+                      </Button>
+                    ) : (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" className="w-full text-xs border-slate-700 bg-slate-700 text-white hover:bg-slate-800">
+                            <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Acoes
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                          <DropdownMenuItem onSelect={() => setDetailRow(detailRowResolver ? detailRowResolver(resolveRow(row)) : resolveRow(row))}>
+                            <Eye className="mr-2 h-3.5 w-3.5" /> Detalhes
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          {getRowActions(row).map((item) => (
+                            <DropdownMenuItem
+                              key={item.label}
+                              onSelect={() => {
+                                void item.onClick();
+                              }}
+                              disabled={item.disabled}
+                              className={item.destructive ? "text-rose-700 focus:text-rose-800" : undefined}
+                            >
+                              {item.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 )}
                 {showDetails && actionsVariant === "full" && (
@@ -996,7 +1041,7 @@ export function DataTable({
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm" className="w-full text-xs">
-                              <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Ações
+                              <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Acoes
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-52">
@@ -1056,7 +1101,7 @@ export function DataTable({
                     {c.label}
                   </TableHead>
                 ))}
-                {showDetails && <TableHead className="w-20 text-xs font-semibold">Ações</TableHead>}
+                {showDetails && <TableHead className="w-20 text-xs font-semibold">Acoes</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1095,14 +1140,42 @@ export function DataTable({
                       <TableCell>
 
                         {actionsVariant === "detailsOnly" ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(resolveRow(row)) : resolveRow(row))}
-                            className="text-xs bg-sky-600 text-white hover:bg-sky-700"
-                          >
-                            <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
-                          </Button>
+                          getRowActions(row).length === 0 ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(resolveRow(row)) : resolveRow(row))}
+                              className="text-xs bg-sky-600 text-white hover:bg-sky-700"
+                            >
+                              <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
+                            </Button>
+                          ) : (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="text-xs bg-slate-700 text-white hover:bg-slate-800">
+                                  <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Acoes
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuItem onSelect={() => setDetailRow(detailRowResolver ? detailRowResolver(resolveRow(row)) : resolveRow(row))}>
+                                  <Eye className="mr-2 h-3.5 w-3.5" /> Detalhes
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                {getRowActions(row).map((item) => (
+                                  <DropdownMenuItem
+                                    key={item.label}
+                                    onSelect={() => {
+                                      void item.onClick();
+                                    }}
+                                    disabled={item.disabled}
+                                    className={item.destructive ? "text-rose-700 focus:text-rose-800" : undefined}
+                                  >
+                                    {item.label}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )
                         ) : (
                           (() => {
                             const currentRow = resolveRow(row);
@@ -1119,7 +1192,7 @@ export function DataTable({
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" size="sm" className="text-xs bg-slate-700 text-white hover:bg-slate-800">
-                                    <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Ações
+                                    <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Acoes
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-56">
@@ -1172,7 +1245,7 @@ export function DataTable({
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t px-4 py-3">
             <span className="text-xs text-muted-foreground">
-              {data.length} registro{data.length !== 1 ? "s" : ""} · Página {page + 1} de {totalPages}
+              {data.length} registro{data.length !== 1 ? "s" : ""} · Pagina {page + 1} de {totalPages}
             </span>
             <div className="flex gap-1">
               <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
@@ -1190,7 +1263,7 @@ export function DataTable({
         <DialogContent className="max-h-[80vh] max-w-lg overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display">Detalhes do Registro</DialogTitle>
-            <DialogDescription className="sr-only">Visualização detalhada dos campos do registro selecionado.</DialogDescription>
+            <DialogDescription className="sr-only">Visualizacao detalhada dos campos do registro selecionado.</DialogDescription>
           </DialogHeader>
           {detailRow && (
             <div className="space-y-2">
@@ -1257,7 +1330,7 @@ export function DataTable({
 export const CARTAS_COLUMNS: Column[] = [
   { key: "data_emissao", label: "Data", render: (r) => formatDate(parseDate(r.data_emissao)) || EMPTY },
   { key: "nome", label: "Nome" },
-  { key: "data_pregacao", label: "Dia da pregação", render: (r) => formatDate(parseDate(r.data_pregacao)) || EMPTY },
+  { key: "data_pregacao", label: "Dia da pregacao", render: (r) => formatDate(parseDate(r.data_pregacao)) || EMPTY },
   { key: "igreja_origem", label: "Igreja origem" },
   { key: "igreja_destino", label: "Igreja destino" },
   {
@@ -1287,9 +1360,9 @@ export const CARTAS_COLUMNS: Column[] = [
     render: (r) => {
       const url =
         r.url_pdf ||
-        r["Link to merged Doc - carta de prega��o"] ||
+        r["Link to merged Doc - carta de pregação"] ||
         r["Link to merged Doc - carta de pregacao"] ||
-        r["Merged Doc URL - carta de prega��o"] ||
+        r["Merged Doc URL - carta de pregação"] ||
         r["Merged Doc URL - carta de pregacao"] ||
         r["Merged Doc URL - Cartas"] ||
         r["Merged Doc URL - cartas"] ||
@@ -1297,7 +1370,7 @@ export const CARTAS_COLUMNS: Column[] = [
         r["Link to merged Doc - Cartas"] ||
         r["Link to merged Doc - cartas"] ||
         r["link_to_merged_doc_-_cartas"];
-      if (!url || url === "-" || url === "â€”") return EMPTY;
+      if (!url || url === "-") return EMPTY;
       const blocked = isBlockedRow(r as Record<string, string>);
       return blocked ? (
         <Button
@@ -1335,9 +1408,10 @@ export const OBREIROS_COLUMNS: Column[] = [
   { key: "igreja", label: "Igreja" },
   { key: "campo", label: "Campo" },
   { key: "status", label: "Status" },
-  { key: "data_ordenacao", label: "Data Ordenação", render: (r) => formatDate(parseDate(r.data_ordenacao)) },
+  { key: "data_ordenacao", label: "Data Ordenacao", render: (r) => formatDate(parseDate(r.data_ordenacao)) },
   { key: "data_batismo", label: "Data Batismo", render: (r) => formatDate(parseDate(r.data_batismo)) },
 ];
+
 
 
 

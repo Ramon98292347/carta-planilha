@@ -29,7 +29,7 @@ export function MetricCards({ cartas, obreiros }: Props) {
   const cargoSource = obreiros.length > 0 ? obreiros : cartas;
   cargoSource.forEach((row) => {
     const cargo = row.cargo;
-    if (cargo && cargo !== "â€”" && cargo !== "-" && cargo !== "—") {
+    if (cargo && cargo !== "-" && cargo !== "—") {
       cargoCounts[cargo] = (cargoCounts[cargo] || 0) + 1;
     }
   });

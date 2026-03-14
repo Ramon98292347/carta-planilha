@@ -8,12 +8,12 @@ import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import Obreiro from "./pages/Obreiro";
 import Divulgacao from "./pages/Divulgacao";
+import { hasAppSession } from "./lib/appSession";
 
 const queryClient = new QueryClient();
 
 function RequireSession({ children }: { children: React.ReactNode }) {
-  const sessionKey = localStorage.getItem("session_key");
-  if (!sessionKey) return <Navigate to="/login" replace />;
+  if (!hasAppSession()) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
