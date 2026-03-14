@@ -42,6 +42,20 @@ type ObreiroProfile = {
 
 type CartaRow = Record<string, string>;
 
+type DestinationOption = {
+  totvs_church_id: string;
+  church_name: string;
+};
+
+type ClientConfig = {
+  church_name: string;
+  pastor_name: string;
+  pastor_phone: string;
+  assinatura_url: string;
+  carimbo_igreja_url: string;
+  carimbo_pastor_url: string;
+};
+
 type LetterFormState = {
   ministerial: string;
   igreja_destino: string;
@@ -66,6 +80,15 @@ const emptyProfile: ObreiroProfile = {
   bairro: "",
   cidade: "",
   uf: "",
+};
+
+const emptyClientConfig: ClientConfig = {
+  church_name: "",
+  pastor_name: "",
+  pastor_phone: "",
+  assinatura_url: "",
+  carimbo_igreja_url: "",
+  carimbo_pastor_url: "",
 };
 
 const emptyLetterForm: LetterFormState = {
@@ -120,6 +143,7 @@ export default function Obreiro() {
   const phone = normalizePhone(localStorage.getItem("obreiro_telefone") || "");
   const churchName = (localStorage.getItem("church_name") || "").trim();
   const pastorName = (localStorage.getItem("pastor_name") || "").trim();
+  const originTotvs = (localStorage.getItem("totvs_church_id") || "").trim();
 
   const [profile, setProfile] = useState<ObreiroProfile>(() => ({
     ...emptyProfile,
@@ -139,7 +163,16 @@ export default function Obreiro() {
     uf: (localStorage.getItem("obreiro_uf") || "").trim(),
   }));
   const [cards, setCards] = useState<CartaRow[]>([]);
-  const [destinationOptions, setDestinationOptions] = useState<string[]>([]);
+  const [destinationOptions, setDestinationOptions] = useState<DestinationOption[]>([]);
+  const [clientConfig, setClientConfig] = useState<ClientConfig>(() => ({
+    ...emptyClientConfig,
+    church_name: churchName,
+    pastor_name: pastorName,
+    pastor_phone: (localStorage.getItem("pastor_phone") || "").trim(),
+    assinatura_url: (localStorage.getItem("assinatura_url") || "").trim(),
+    carimbo_igreja_url: (localStorage.getItem("carimbo_igreja_url") || "").trim(),
+    carimbo_pastor_url: (localStorage.getItem("carimbo_pastor_url") || "").trim(),
+  }));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -209,6 +242,42 @@ export default function Obreiro() {
     localStorage.setItem("obreiro_uf", nextProfile.uf || "");
   };
 
+  const loadClientConfig = async () => {
+    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+
+    const params = new URLSearchParams({
+      select: "church_name,pastor_name,pastor_phone,assinatura_url,carimbo_igreja_url,carimbo_pastor_url",
+      limit: "1",
+    });
+    params.set("id", `eq.${clientId}`);
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/clients?${params.toString()}`, {
+      headers: getSupabaseHeaders({ json: false }),
+    });
+    if (!response.ok) return;
+
+    const payload = (await response.json().catch(() => [])) as Array<Record<string, string | null>>;
+    const row = payload?.[0];
+    if (!row) return;
+
+    const nextConfig: ClientConfig = {
+      church_name: String(row.church_name || churchName || "").trim(),
+      pastor_name: String(row.pastor_name || pastorName || "").trim(),
+      pastor_phone: String(row.pastor_phone || "").trim(),
+      assinatura_url: String(row.assinatura_url || "").trim(),
+      carimbo_igreja_url: String(row.carimbo_igreja_url || "").trim(),
+      carimbo_pastor_url: String(row.carimbo_pastor_url || "").trim(),
+    };
+
+    setClientConfig(nextConfig);
+    localStorage.setItem("church_name", nextConfig.church_name || "");
+    localStorage.setItem("pastor_name", nextConfig.pastor_name || "");
+    localStorage.setItem("pastor_phone", nextConfig.pastor_phone || "");
+    localStorage.setItem("assinatura_url", nextConfig.assinatura_url || "");
+    localStorage.setItem("carimbo_igreja_url", nextConfig.carimbo_igreja_url || "");
+    localStorage.setItem("carimbo_pastor_url", nextConfig.carimbo_pastor_url || "");
+  };
+
   const loadDestinationOptions = async () => {
     if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
 
@@ -233,11 +302,15 @@ export default function Obreiro() {
 
     const options = payload
       .filter((row) => row.is_active !== false)
-      .map((row) => String(row.church_name || "").trim())
-      .filter((item) => item && item !== churchName)
-      .sort((a, b) => a.localeCompare(b, "pt-BR"));
+      .map((row) => ({
+        totvs_church_id: String(row.totvs_church_id || "").trim(),
+        church_name: String(row.church_name || "").trim(),
+      }))
+      .filter((row) => row.totvs_church_id && row.church_name && row.church_name !== (clientConfig.church_name || churchName))
+      .sort((a, b) => a.church_name.localeCompare(b.church_name, "pt-BR"));
 
-    setDestinationOptions(Array.from(new Set(options)));
+    const uniqueOptions = Array.from(new Map(options.map((item) => [item.totvs_church_id, item])).values());
+    setDestinationOptions(uniqueOptions);
   };
 
   const loadCards = async () => {
@@ -259,7 +332,7 @@ export default function Obreiro() {
   const refreshPage = async () => {
     setLoading(true);
     try {
-      await Promise.all([loadProfile(), loadDestinationOptions(), loadCards()]);
+      await Promise.all([loadProfile(), loadClientConfig(), loadDestinationOptions(), loadCards()]);
     } finally {
       setLoading(false);
     }
@@ -272,10 +345,12 @@ export default function Obreiro() {
   useEffect(() => {
     if (!clientId || !phone) return;
     const id = window.setInterval(() => {
-      void Promise.all([loadProfile(), loadDestinationOptions(), loadCards()]);
+      void Promise.all([loadProfile(), loadClientConfig(), loadDestinationOptions(), loadCards()]);
     }, CACHE_REFRESH_MS);
     return () => window.clearInterval(id);
   }, [clientId, phone, profile.status_carta]);
+
+  const selectedDestination = useMemo(() => destinationOptions.find((item) => item.church_name === letterForm.igreja_destino) || null, [destinationOptions, letterForm.igreja_destino]);
 
   const stats = useMemo(() => {
     const labels = cards.map((row) => getCartaStatus(row, profile));
@@ -368,13 +443,26 @@ export default function Obreiro() {
     obreiro_id: profile.id,
     nome: profile.nome,
     telefone: profile.telefone,
-    email: profile.email || "",
-    ministerial: letterForm.ministerial || profile.cargo_ministerial,
-    igreja_origem: churchName,
+    igreja_origem: clientConfig.church_name || churchName,
+    origem: clientConfig.church_name || churchName,
     igreja_destino: (letterForm.igreja_destino || letterForm.igreja_destino_manual).trim(),
+    destino: (letterForm.igreja_destino || letterForm.igreja_destino_manual).trim(),
     dia_pregacao: formatDateBr(letterForm.dia_pregacao),
     data_emissao: formatDateBr(new Date().toISOString().slice(0, 10)),
+    origem_totvs: originTotvs || null,
+    destino_totvs: selectedDestination?.totvs_church_id || null,
+    origem_nome: clientConfig.church_name || churchName || null,
+    destino_nome: selectedDestination?.church_name || (letterForm.igreja_destino_manual.trim() || null),
+    email: profile.email || "",
+    email_pregador: profile.email || null,
+    ministerial: letterForm.ministerial || profile.cargo_ministerial,
+    data_separacao: formatDateBr(profile.data_ordenacao) || null,
     data_da_separacao: formatDateBr(profile.data_ordenacao),
+    pastor_responsavel: clientConfig.pastor_name || pastorName || null,
+    telefone_pastor: clientConfig.pastor_phone || null,
+    assinatura_url: clientConfig.assinatura_url || null,
+    carimbo_igreja_url: clientConfig.carimbo_igreja_url || null,
+    carimbo_pastor_url: clientConfig.carimbo_pastor_url || null,
     status_usuario: profile.status || "AUTORIZADO",
     status_carta: profile.status_carta || "GERADA",
   });
@@ -479,7 +567,7 @@ export default function Obreiro() {
           <CardHeader>
             <CardTitle className="text-xl">{profile.nome || "Obreiro"}</CardTitle>
             <CardDescription>
-              Igreja: {churchName || "-"} | Pastor: {pastorName || "-"}
+              Igreja: {clientConfig.church_name || churchName || "-"} | Pastor: {clientConfig.pastor_name || pastorName || "-"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -691,7 +779,7 @@ export default function Obreiro() {
                   <Label>Igreja que faz a carta (origem)</Label>
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <Input value={churchName} disabled className="pl-10" />
+                    <Input value={clientConfig.church_name || churchName} disabled className="pl-10" />
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -707,7 +795,7 @@ export default function Obreiro() {
                     </SelectTrigger>
                     <SelectContent>
                       {destinationOptions.map((item) => (
-                        <SelectItem key={item} value={item}>{item}</SelectItem>
+                        <SelectItem key={item.totvs_church_id} value={item.church_name}>{item.church_name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -751,7 +839,7 @@ export default function Obreiro() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Igreja de origem e destino</p>
                   <div className="space-y-2 text-slate-900">
-                    <div className="text-base font-semibold sm:text-lg">{churchName || "Nao informada"}</div>
+                    <div className="text-base font-semibold sm:text-lg">{clientConfig.church_name || churchName || "Nao informada"}</div>
                     <div className="flex items-center gap-2 text-slate-600">
                       <Building2 className="h-4 w-4 text-slate-400" />
                       <span>{(letterForm.igreja_destino || letterForm.igreja_destino_manual).trim() || "-"}</span>
@@ -777,10 +865,10 @@ export default function Obreiro() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Pastor responsavel da igreja</p>
                   <div className="space-y-2 text-slate-900">
-                    <div className="text-base font-semibold sm:text-lg">{pastorName || "Nao informado"}</div>
+                    <div className="text-base font-semibold sm:text-lg">{clientConfig.pastor_name || pastorName || "Nao informado"}</div>
                     <div className="flex items-center gap-2 text-slate-600">
                       <Phone className="h-4 w-4 text-slate-400" />
-                      <span>{profile.telefone || "-"}</span>
+                      <span>{clientConfig.pastor_phone || "-"}</span>
                     </div>
                   </div>
                 </div>
