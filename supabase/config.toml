@@ -25,6 +25,9 @@ verify_jwt = false
 [functions.get-letter-pdf-url]
 verify_jwt = false
 
+[functions.get-my-profile]
+verify_jwt = false
+
 [functions.save-my-profile]
 verify_jwt = false
 

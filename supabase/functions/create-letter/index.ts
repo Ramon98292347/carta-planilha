@@ -365,7 +365,9 @@ Deno.serve(async (req) => {
     const ownershipTotvs = session.active_totvs_id;
     const activeScope = computeScope(ownershipTotvs, churches);
     const activeAncestors = collectAncestors(ownershipTotvs, churches);
-    const allowedDestinations = new Set<string>([...activeScope, ...activeAncestors]);
+    const directParent = getDirectParentChurch(ownershipTotvs, churches);
+    const parentScope = directParent ? computeScope(directParent.totvs_id, churches) : new Set<string>();
+    const allowedDestinations = new Set<string>([...activeScope, ...activeAncestors, ...parentScope]);
 
     if (!allowedDestinations.has(destinationTotvs)) {
       return json({
@@ -376,8 +378,7 @@ Deno.serve(async (req) => {
     }
 
     // Regra do pastor: se o destino estiver acima da igreja dele, a origem deve ser sempre a mae direta.
-    if (session.role === "pastor" && activeAncestors.has(destinationTotvs)) {
-      const directParent = getDirectParentChurch(ownershipTotvs, churches);
+    if (session.role === "pastor" && !activeScope.has(destinationTotvs)) {
       if (!directParent) {
         return json({
           ok: false,
@@ -389,7 +390,7 @@ Deno.serve(async (req) => {
         return json({
           ok: false,
           error: "origin_must_be_direct_parent",
-          detail: "Para destino acima da sua igreja, a origem deve ser sempre a igreja mae.",
+          detail: "Para destino fora do seu campo direto, a origem deve ser sempre a igreja mae.",
           required_origin_totvs_id: directParent.totvs_id,
         }, 403);
       }
@@ -507,6 +508,7 @@ Deno.serve(async (req) => {
     if (insErr) return json({ ok: false, error: "insert_failed", details: insErr.message }, 400);
 
     const n8nPayload = {
+      letter_id: created.id || "",
       nome: created.preacher_name || "",
       telefone: preacher_phone || "",
       igreja_origem: created.church_origin || "",

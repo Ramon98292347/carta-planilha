@@ -166,16 +166,25 @@ export function useSheetData() {
       let letters = lettersResult.data?.letters || [];
       const notificationsRows = notificationsResult.data?.notifications || [];
 
-      // Comentario: para pastor, o painel mostra apenas as cartas emitidas
-      // pela church_origin da igreja ativa do login.
-      if (userRole === "pastor" && activeTotvsId) {
-        letters = letters.filter((row) => parseTotvsFromText(String(row.church_origin || "")) === activeTotvsId);
-      }
-
       const churchByTotvs = new Map<string, ChurchRow>();
       churches.forEach((church) => {
         churchByTotvs.set(String(church.totvs_id || "").trim(), church);
       });
+
+      if (userRole === "pastor" && activeTotvsId) {
+        const pastorScope = new Set<string>([
+          activeTotvsId,
+          ...churches.map((church) => String(church.totvs_id || "").trim()).filter(Boolean),
+        ]);
+
+        // Comentario: pastor de central/setorial precisa ver as cartas do seu
+        // campo inteiro, nao apenas as emitidas pela igreja ativa.
+        letters = letters.filter((row) => {
+          const churchTotvs = String(row.church_totvs_id || "").trim();
+          const originTotvs = parseTotvsFromText(String(row.church_origin || ""));
+          return pastorScope.has(churchTotvs) || pastorScope.has(originTotvs);
+        });
+      }
 
       const memberById = new Map<string, MemberRow>();
       const memberByPhone = new Map<string, MemberRow>();

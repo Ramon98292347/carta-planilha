@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 const CREATE_LETTER_FUNCTION_NAME = (import.meta.env.VITE_CREATE_LETTER_FUNCTION_NAME || "create-letter").trim();
 const GET_LETTER_PDF_URL_FUNCTION_NAME = (import.meta.env.VITE_GET_LETTER_PDF_URL_FUNCTION_NAME || "get-letter-pdf-url").trim();
+const GET_MY_PROFILE_FUNCTION_NAME = (import.meta.env.VITE_GET_MY_PROFILE_FUNCTION_NAME || "get-my-profile").trim();
 const LIST_LETTERS_FUNCTION_NAME = (import.meta.env.VITE_LIST_LETTERS_FUNCTION_NAME || "list-letters").trim();
 const LIST_NOTIFICATIONS_FUNCTION_NAME = (import.meta.env.VITE_LIST_NOTIFICATIONS_FUNCTION_NAME || "list-notifications").trim();
 const MARK_NOTIFICATIONS_READ_FUNCTION_NAME = (import.meta.env.VITE_MARK_NOTIFICATIONS_READ_FUNCTION_NAME || "mark-notifications-read").trim();
@@ -265,7 +266,19 @@ export default function Obreiro() {
 
   const loadProfile = async () => {
     if (!userId) return;
-    setProfile(readProfileFromStorage());
+    const fallbackProfile = readProfileFromStorage();
+    setProfile(fallbackProfile);
+
+    const { data, error } = await supabase.functions.invoke<{
+      ok?: boolean;
+      profile?: Record<string, unknown>;
+    }>(GET_MY_PROFILE_FUNCTION_NAME, {});
+
+    if (error || !data?.ok || !data.profile) return;
+
+    const nextProfile = mapSavedProfileToObreiroProfile(data.profile, fallbackProfile);
+    setProfile(nextProfile);
+    writeProfileToStorage(nextProfile);
   };
 
   const loadClientConfig = async () => {

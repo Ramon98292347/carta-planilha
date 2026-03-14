@@ -25,6 +25,11 @@ type Body = {
 
 type ChurchRow = { totvs_id: string; parent_totvs_id: string | null };
 
+function getDirectParentTotvs(rootTotvs: string, churches: ChurchRow[]): string {
+  const current = churches.find((church) => String(church.totvs_id) === rootTotvs);
+  return String(current?.parent_totvs_id || "").trim();
+}
+
 async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
   const auth = req.headers.get("authorization") || "";
   const match = auth.match(/^Bearer\s+(.+)$/i);
@@ -134,7 +139,11 @@ Deno.serve(async (req) => {
     } else {
       const scopeRootTotvs = await resolveScopeRootTotvs(sb, session);
       const baseScope = computeScope(scopeRootTotvs, allRows);
-      if (requestedRoot && !baseScope.has(requestedRoot)) {
+      const directParentTotvs = getDirectParentTotvs(scopeRootTotvs, allRows);
+      const allowedRoots = new Set<string>([scopeRootTotvs]);
+      if (directParentTotvs) allowedRoots.add(directParentTotvs);
+
+      if (requestedRoot && !allowedRoots.has(requestedRoot) && !baseScope.has(requestedRoot)) {
         return json({ ok: false, error: "forbidden_church_out_of_scope" }, 403);
       }
       const effectiveRoot = requestedRoot || scopeRootTotvs;

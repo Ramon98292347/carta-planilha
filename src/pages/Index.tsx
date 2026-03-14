@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertCircle, Bell, Building2, CalendarDays, CheckCircle2, Download, FileText, Loader2, LogOut, Phone, Plus, Search, UserCircle2, UserPlus } from "lucide-react";
+import { AlertCircle, Bell, Building2, CalendarDays, CheckCircle2, Download, FileText, Loader2, LogOut, Phone, Plus, Save, Search, UserCircle2, UserPlus } from "lucide-react";
 
 import { useSheetData } from "@/hooks/useSheetData";
 import { MetricCards } from "@/components/MetricCards";
@@ -9,6 +9,7 @@ import { Filters, FilterValues, emptyFilters } from "@/components/Filters";
 import { DataTable, CARTAS_COLUMNS, OBREIROS_COLUMNS } from "@/components/DataTable";
 import { parseDate } from "@/lib/sheets";
 import { clearAppSession } from "@/lib/appSession";
+import { formatCep, lookupCep, onlyDigits } from "@/lib/cep";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,6 +69,29 @@ type PastorLetterFormState = {
   preach_period: "MANHA" | "TARDE" | "NOITE";
 };
 
+type PastorProfileState = {
+  nome: string;
+  telefone: string;
+  email: string;
+  data_nascimento: string;
+  data_ordenacao: string;
+  cargo_ministerial: string;
+  cep: string;
+  endereco: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
+};
+
+type DestinationChurchRow = {
+  totvs_id: string;
+  parent_totvs_id?: string | null;
+  church_name: string;
+  class?: string;
+};
+
 const ministerialOptions = ["Membro", "Cooperador", "Diácono", "Presbítero", "Pastor"] as const;
 
 const CARTAS_DETAIL_FIELDS = [
@@ -85,6 +109,8 @@ const CARTAS_DETAIL_FIELDS = [
 const FILTERS_STORAGE_KEY = "cartas_filters";
 const CREATE_LETTER_FUNCTION_NAME = (import.meta.env.VITE_CREATE_LETTER_FUNCTION_NAME || "create-letter").trim();
 const MANAGE_LETTER_FUNCTION_NAME = (import.meta.env.VITE_MANAGE_LETTER_FUNCTION_NAME || "manage-letter").trim();
+const LIST_CHURCHES_FUNCTION_NAME = (import.meta.env.VITE_LIST_CHURCHES_FUNCTION_NAME || "list-churches-in-scope").trim();
+const GET_MY_PROFILE_FUNCTION_NAME = (import.meta.env.VITE_GET_MY_PROFILE_FUNCTION_NAME || "get-my-profile").trim();
 
 const createEmptyUserForm = (role: "pastor" | "obreiro", activeTotvsId: string): UserFormState => ({
   cpf: "",
@@ -121,6 +147,58 @@ const createEmptyLetterForm = (): PastorLetterFormState => ({
   preach_period: "NOITE",
 });
 
+const readPastorProfileFromStorage = (): PastorProfileState => ({
+  nome: (localStorage.getItem("user_name") || localStorage.getItem("pastor_name") || "").trim(),
+  telefone: onlyDigits(localStorage.getItem("user_phone") || localStorage.getItem("pastor_phone") || ""),
+  email: (localStorage.getItem("user_email") || "").trim(),
+  data_nascimento: (localStorage.getItem("pastor_data_nascimento") || "").trim(),
+  data_ordenacao: (localStorage.getItem("pastor_data_ordenacao") || "").trim(),
+  cargo_ministerial: (localStorage.getItem("minister_role") || localStorage.getItem("pastor_minister_role") || "Pastor").trim(),
+  cep: (localStorage.getItem("pastor_cep") || "").trim(),
+  endereco: (localStorage.getItem("pastor_endereco") || "").trim(),
+  numero: (localStorage.getItem("pastor_numero") || "").trim(),
+  complemento: (localStorage.getItem("pastor_complemento") || "").trim(),
+  bairro: (localStorage.getItem("pastor_bairro") || "").trim(),
+  cidade: (localStorage.getItem("pastor_cidade") || "").trim(),
+  uf: (localStorage.getItem("pastor_uf") || "").trim(),
+});
+
+const mapSavedProfileToPastorProfile = (input: Record<string, unknown>, fallback: PastorProfileState): PastorProfileState => ({
+  ...fallback,
+  nome: String(input.full_name || fallback.nome || "").trim(),
+  telefone: onlyDigits(String(input.phone || fallback.telefone || "")),
+  email: String(input.email || fallback.email || "").trim(),
+  data_nascimento: String(input.birth_date || fallback.data_nascimento || "").trim(),
+  data_ordenacao: String(input.ordination_date || fallback.data_ordenacao || "").trim(),
+  cargo_ministerial: String(input.minister_role || fallback.cargo_ministerial || "").trim(),
+  cep: String(input.cep || fallback.cep || "").trim(),
+  endereco: String(input.address_street || fallback.endereco || "").trim(),
+  numero: String(input.address_number || fallback.numero || "").trim(),
+  complemento: String(input.address_complement || fallback.complemento || "").trim(),
+  bairro: String(input.address_neighborhood || fallback.bairro || "").trim(),
+  cidade: String(input.address_city || fallback.cidade || "").trim(),
+  uf: String(input.address_state || fallback.uf || "").trim().toUpperCase(),
+});
+
+const writePastorProfileToStorage = (profile: PastorProfileState) => {
+  localStorage.setItem("user_name", profile.nome || "");
+  localStorage.setItem("pastor_name", profile.nome || "");
+  localStorage.setItem("user_phone", profile.telefone || "");
+  localStorage.setItem("pastor_phone", profile.telefone || "");
+  localStorage.setItem("user_email", profile.email || "");
+  localStorage.setItem("minister_role", profile.cargo_ministerial || "");
+  localStorage.setItem("pastor_minister_role", profile.cargo_ministerial || "");
+  localStorage.setItem("pastor_data_nascimento", profile.data_nascimento || "");
+  localStorage.setItem("pastor_data_ordenacao", profile.data_ordenacao || "");
+  localStorage.setItem("pastor_cep", profile.cep || "");
+  localStorage.setItem("pastor_endereco", profile.endereco || "");
+  localStorage.setItem("pastor_numero", profile.numero || "");
+  localStorage.setItem("pastor_complemento", profile.complemento || "");
+  localStorage.setItem("pastor_bairro", profile.bairro || "");
+  localStorage.setItem("pastor_cidade", profile.cidade || "");
+  localStorage.setItem("pastor_uf", profile.uf || "");
+};
+
 const normalizeSearch = (value: string) =>
   (value || "")
     .trim()
@@ -142,6 +220,11 @@ const formatDateBr = (value: string) => {
   const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return raw;
   return `${match[3]}/${match[2]}/${match[1]}`;
+};
+
+const parseTotvsFromChurchText = (value: string) => {
+  const match = String(value || "").trim().match(/^(\d{3,})\b/);
+  return match ? match[1] : "";
 };
 
 const getDerivedStatusForFilter = (row: Record<string, string>) => {
@@ -192,10 +275,17 @@ const Index = () => {
   const [creatingLetter, setCreatingLetter] = useState(false);
   const [letterTarget, setLetterTarget] = useState<LetterTarget | null>(null);
   const [letterForm, setLetterForm] = useState<PastorLetterFormState>(createEmptyLetterForm());
+  const [pastorDestinationChurches, setPastorDestinationChurches] = useState<DestinationChurchRow[]>([]);
+  const [loadingPastorDestinations, setLoadingPastorDestinations] = useState(false);
+  const [pastorProfile, setPastorProfile] = useState<PastorProfileState>(() => readPastorProfileFromStorage());
+  const [savingPastorProfile, setSavingPastorProfile] = useState(false);
+  const [lookingUpPastorCep, setLookingUpPastorCep] = useState(false);
 
   const userRole = (localStorage.getItem("user_role") || "").trim().toLowerCase();
   const churchName = (localStorage.getItem("church_name") || "").trim();
   const userName = (localStorage.getItem("user_name") || localStorage.getItem("pastor_name") || "").trim();
+  const userPhone = (localStorage.getItem("user_phone") || localStorage.getItem("pastor_phone") || "").trim();
+  const userMinisterRole = (localStorage.getItem("minister_role") || localStorage.getItem("pastor_minister_role") || "Pastor").trim();
   const activeTotvsId = (localStorage.getItem("totvs_church_id") || "").trim();
   const userId = (localStorage.getItem("user_id") || "").trim();
 
@@ -238,6 +328,31 @@ const Index = () => {
       setLetterTarget(null);
     }
   }, [letterDialogOpen]);
+
+  useEffect(() => {
+    if (userRole === "pastor") {
+      setPastorProfile(readPastorProfileFromStorage());
+    }
+  }, [userRole, userId]);
+
+  useEffect(() => {
+    if (userRole !== "pastor" || !userId) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const { data, error } = await supabase.functions.invoke<{ ok?: boolean; profile?: Record<string, unknown> }>(GET_MY_PROFILE_FUNCTION_NAME, {});
+      if (cancelled || error || !data?.ok || !data.profile) return;
+
+      const nextProfile = mapSavedProfileToPastorProfile(data.profile, readPastorProfileFromStorage());
+      setPastorProfile(nextProfile);
+      writePastorProfileToStorage(nextProfile);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userRole, userId]);
 
   const cartasWithSearch = useMemo(() => {
     return cartas.map((row) => ({ row, search: normalizeSearch(row.nome || "") }));
@@ -328,12 +443,12 @@ const Index = () => {
     return {
       id: userId,
       nome: userName,
-      telefone: "",
+      telefone: userPhone,
       email: "",
-      cargo: "Pastor",
+      cargo: userMinisterRole,
       church_totvs_id: activeTotvsId,
     };
-  }, [userRole, userId, userName, activeTotvsId]);
+  }, [userRole, userId, userName, userPhone, userMinisterRole, activeTotvsId]);
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const maxPregacaoIso = useMemo(() => {
     const limit = new Date();
@@ -345,22 +460,77 @@ const Index = () => {
     () => churches.find((church) => String(church.totvs_id || "").trim() === activeTotvsId) || null,
     [churches, activeTotvsId],
   );
+  const directParentTotvsId = String(activeChurch?.parent_totvs_id || "").trim();
 
   const parentChurch = useMemo(
-    () => churches.find((church) => String(church.totvs_id || "").trim() === String(activeChurch?.parent_totvs_id || "").trim()) || null,
-    [churches, activeChurch],
+    () => churches.find((church) => String(church.totvs_id || "").trim() === directParentTotvsId) || null,
+    [churches, directParentTotvsId],
+  );
+
+  useEffect(() => {
+    if (!letterDialogOpen || userRole !== "pastor") {
+      setPastorDestinationChurches([]);
+      setLoadingPastorDestinations(false);
+      return;
+    }
+
+    if (!directParentTotvsId) {
+      setPastorDestinationChurches(churches);
+      setLoadingPastorDestinations(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingPastorDestinations(true);
+
+    void (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke<{
+          ok?: boolean;
+          churches?: DestinationChurchRow[];
+        }>(LIST_CHURCHES_FUNCTION_NAME, {
+          body: { page: 1, page_size: 1000, root_totvs_id: directParentTotvsId },
+        });
+
+        if (cancelled) return;
+
+        if (error || !data?.ok || !data.churches) {
+          setPastorDestinationChurches(churches);
+          return;
+        }
+
+        setPastorDestinationChurches(data.churches);
+      } finally {
+        if (!cancelled) setLoadingPastorDestinations(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [letterDialogOpen, userRole, directParentTotvsId, churches]);
+
+  const destinationSourceChurches = useMemo(
+    () => (userRole === "pastor" ? (pastorDestinationChurches.length ? pastorDestinationChurches : churches) : churches),
+    [userRole, pastorDestinationChurches, churches],
+  );
+  const resolvedParentChurch = useMemo(
+    () =>
+      parentChurch ||
+      destinationSourceChurches.find((church) => String(church.totvs_id || "").trim() === directParentTotvsId) ||
+      null,
+    [parentChurch, destinationSourceChurches, directParentTotvsId],
   );
 
   const allowedOrigins = useMemo(() => {
     const list = [];
     if (activeChurch) list.push(activeChurch);
-    if (parentChurch && parentChurch.totvs_id !== activeChurch?.totvs_id) list.push(parentChurch);
+    if (resolvedParentChurch && resolvedParentChurch.totvs_id !== activeChurch?.totvs_id) list.push(resolvedParentChurch);
     return list;
-  }, [activeChurch, parentChurch]);
-
+  }, [activeChurch, resolvedParentChurch]);
   const destinationOptions = useMemo(
-    () => churches.map((church) => ({ value: `${church.totvs_id} - ${church.church_name}`, church })),
-    [churches],
+    () => destinationSourceChurches.map((church) => ({ value: `${church.totvs_id} - ${church.church_name}`, church })),
+    [destinationSourceChurches],
   );
   const filteredPastorDestinationOptions = useMemo(() => {
     const term = normalizeSearch(letterForm.church_destination);
@@ -372,12 +542,144 @@ const Index = () => {
       })
       .slice(0, 12);
   }, [destinationOptions, letterForm.church_destination, letterForm.church_destination_manual]);
+  const activeScopeTotvs = useMemo(
+    () => new Set(churches.map((church) => String(church.totvs_id || "").trim()).filter(Boolean)),
+    [churches],
+  );
+  const parentScopeTotvs = useMemo(
+    () => new Set(destinationSourceChurches.map((church) => String(church.totvs_id || "").trim()).filter(Boolean)),
+    [destinationSourceChurches],
+  );
+  const selectedPastorDestinationChurch = useMemo(() => {
+    const destinationTotvs = parseTotvsFromChurchText(letterForm.church_destination);
+    if (!destinationTotvs) return null;
+    return destinationSourceChurches.find((church) => String(church.totvs_id || "").trim() === destinationTotvs) || null;
+  }, [destinationSourceChurches, letterForm.church_destination]);
+  const shouldUseParentOriginForDestination = useMemo(() => {
+    if (!selectedPastorDestinationChurch || !activeChurch || !resolvedParentChurch) return false;
+    const destinationTotvs = String(selectedPastorDestinationChurch.totvs_id || "").trim();
+    return parentScopeTotvs.has(destinationTotvs) && !activeScopeTotvs.has(destinationTotvs);
+  }, [selectedPastorDestinationChurch, activeChurch, resolvedParentChurch, parentScopeTotvs, activeScopeTotvs]);
+
+  const isPastorManagedOriginTotvs = (totvsId: string) => {
+    const normalized = String(totvsId || "").trim();
+    if (!normalized) return false;
+    return normalized === activeTotvsId || activeScopeTotvs.has(normalized);
+  };
+
+  const isPastorManagedLetter = (row: Record<string, string>) => {
+    if (userRole !== "pastor") return true;
+    const originTotvs = parseTotvsFromChurchText(String(row.igreja_origem || ""));
+    return isPastorManagedOriginTotvs(originTotvs);
+  };
+
+  const isPastorManagedObreiro = (row: Record<string, string>) => {
+    if (userRole !== "pastor") return true;
+    const workerTotvs = String(row.church_totvs_id || row.default_totvs_id || "").trim();
+    return isPastorManagedOriginTotvs(workerTotvs);
+  };
+
+  useEffect(() => {
+    if (!letterDialogOpen || !shouldUseParentOriginForDestination || !resolvedParentChurch) return;
+
+    const requiredOrigin = `${resolvedParentChurch.totvs_id} - ${resolvedParentChurch.church_name}`;
+    setLetterForm((prev) => (prev.church_origin === requiredOrigin ? prev : { ...prev, church_origin: requiredOrigin }));
+  }, [letterDialogOpen, shouldUseParentOriginForDestination, resolvedParentChurch]);
+  const selectedOriginChurch = useMemo(
+    () => allowedOrigins.find((church) => `${church.totvs_id} - ${church.church_name}` === letterForm.church_origin) || null,
+    [allowedOrigins, letterForm.church_origin],
+  );
+  const previewSignerName = String((selectedOriginChurch as { pastor?: { full_name?: string } } | null)?.pastor?.full_name || selectedOriginChurch?.church_name || churchName || "Resolvido pela hierarquia").trim();
+  const previewSignerPhone = String((selectedOriginChurch as { pastor?: { phone?: string } } | null)?.pastor?.phone || "Definido pela igreja de origem na geracao da carta").trim();
 
   const handleInstall = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
     const choice = await installPrompt.userChoice;
     if (choice.outcome === "accepted") setInstallPrompt(null);
+  };
+
+  const handlePastorProfileChange = (field: keyof PastorProfileState, value: string) => {
+    setPastorProfile((prev) => ({
+      ...prev,
+      [field]: field === "telefone" ? onlyDigits(value) : value,
+    }));
+  };
+
+  const handlePastorCepLookup = async (value: string) => {
+    const formatted = formatCep(value);
+    setPastorProfile((prev) => ({ ...prev, cep: formatted }));
+
+    if (onlyDigits(formatted).length !== 8) return;
+
+    setLookingUpPastorCep(true);
+    try {
+      const result = await lookupCep(formatted);
+      if (!result) {
+        toast.error("CEP não encontrado.");
+        return;
+      }
+
+      setPastorProfile((prev) => ({
+        ...prev,
+        cep: result.cep,
+        endereco: result.street || prev.endereco,
+        bairro: result.neighborhood || prev.bairro,
+        cidade: result.city || prev.cidade,
+        uf: result.state || prev.uf,
+      }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao consultar o CEP.");
+    } finally {
+      setLookingUpPastorCep(false);
+    }
+  };
+
+  const handleSavePastorProfile = async () => {
+    if (!pastorProfile.nome.trim()) {
+      toast.error("Preencha o nome completo.");
+      return;
+    }
+
+    if (!pastorProfile.telefone.trim()) {
+      toast.error("Preencha o telefone.");
+      return;
+    }
+
+    setSavingPastorProfile(true);
+    try {
+      const payload = {
+        full_name: pastorProfile.nome.trim(),
+        phone: pastorProfile.telefone.trim(),
+        email: pastorProfile.email.trim() || null,
+        birth_date: pastorProfile.data_nascimento.trim() || null,
+        ordination_date: pastorProfile.data_ordenacao.trim() || null,
+        minister_role: pastorProfile.cargo_ministerial.trim() || null,
+        cep: pastorProfile.cep.trim() || null,
+        address_street: pastorProfile.endereco.trim() || null,
+        address_number: pastorProfile.numero.trim() || null,
+        address_complement: pastorProfile.complemento.trim() || null,
+        address_neighborhood: pastorProfile.bairro.trim() || null,
+        address_city: pastorProfile.cidade.trim() || null,
+        address_state: pastorProfile.uf.trim().toUpperCase() || null,
+      };
+
+      const { data, error } = await supabase.functions.invoke<{ ok?: boolean; profile?: Record<string, unknown>; error?: string }>("save-my-profile", {
+        body: payload,
+      });
+
+      if (error) throw error;
+      if (!data?.ok || !data.profile) throw new Error(data?.error || "Falha ao salvar cadastro.");
+
+      const nextProfile = mapSavedProfileToPastorProfile(data.profile, pastorProfile);
+      setPastorProfile(nextProfile);
+      writePastorProfileToStorage(nextProfile);
+      toast.success("Cadastro atualizado.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao salvar cadastro.");
+    } finally {
+      setSavingPastorProfile(false);
+    }
   };
 
   const handleSaveUser = async () => {
@@ -680,9 +982,9 @@ const Index = () => {
                     openLetterDialogForTarget({
                       id: userId,
                       nome: userName,
-                      telefone: "",
+                      telefone: userPhone,
                       email: "",
-                      cargo: "Pastor",
+                      cargo: userMinisterRole,
                       church_totvs_id: activeTotvsId,
                     })}
                   className="gap-1"
@@ -775,6 +1077,11 @@ const Index = () => {
                   <TabsTrigger value="obreiros" className="gap-1.5">
                     Obreiros ({obreiros.length})
                   </TabsTrigger>
+                  {userRole === "pastor" && (
+                    <TabsTrigger value="cadastro" className="gap-1.5">
+                      <UserCircle2 className="h-4 w-4" /> Meu cadastro
+                    </TabsTrigger>
+                  )}
                 </TabsList>
               </div>
 
@@ -800,7 +1107,8 @@ const Index = () => {
                     const rawStatus = String(row.raw_status || "").trim().toUpperCase();
                     const blocked = isLetterBlocked(row, obreiro);
                     const isEnviado = rawStatus === "ENVIADA";
-                    const canLiberar = !blocked && rawStatus === "AGUARDANDO_LIBERACAO";
+                    const managedByCurrentPastor = isPastorManagedLetter(row);
+                    const canLiberar = !blocked && managedByCurrentPastor && rawStatus === "AGUARDANDO_LIBERACAO";
                     const canCompartilhar = !blocked && (rawStatus === "LIBERADA" || rawStatus === "ENVIADA");
 
                     const actions = [];
@@ -844,11 +1152,12 @@ const Index = () => {
                         {
                           label: isRowBlocked(obreiro) ? "Desbloquear usuario" : "Bloquear usuario",
                           onClick: () => handleToggleUserBlock(obreiro),
+                          disabled: !managedByCurrentPastor || !isPastorManagedObreiro(obreiro),
                         },
                         {
                           label: `Liberacao automatica: ${isAutoReleaseEnabled(obreiro) ? "ON" : "OFF"}`,
                           onClick: () => handleToggleAutoRelease(obreiro),
-                          disabled: isRowBlocked(obreiro),
+                          disabled: isRowBlocked(obreiro) || !managedByCurrentPastor || !isPastorManagedObreiro(obreiro),
                         },
                       );
                     } else {
@@ -925,11 +1234,12 @@ const Index = () => {
                     {
                       label: isRowBlocked(row) ? "Desbloquear usuario" : "Bloquear usuario",
                       onClick: () => handleToggleUserBlock(row),
+                      disabled: !isPastorManagedObreiro(row),
                     },
                     {
                       label: `Liberacao automatica: ${isAutoReleaseEnabled(row) ? "ON" : "OFF"}`,
                       onClick: () => handleToggleAutoRelease(row),
-                      disabled: isRowBlocked(row),
+                      disabled: isRowBlocked(row) || !isPastorManagedObreiro(row),
                     },
                   ]}
                   detailRowResolver={(row) => {
@@ -943,6 +1253,91 @@ const Index = () => {
                   }}
                 />
               </TabsContent>
+
+              {userRole === "pastor" && (
+                <TabsContent value="cadastro" className="mt-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Meu cadastro</CardTitle>
+                      <CardDescription>
+                        Atualize seus dados pessoais e ministeriais. Esse espaço fica disponível para o pastor editar o próprio cadastro, igual ao obreiro.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Nome completo</Label>
+                        <Input value={pastorProfile.nome} onChange={(e) => handlePastorProfileChange("nome", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Telefone</Label>
+                        <Input value={pastorProfile.telefone} onChange={(e) => handlePastorProfileChange("telefone", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Email</Label>
+                        <Input value={pastorProfile.email} onChange={(e) => handlePastorProfileChange("email", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Cargo ministerial</Label>
+                        <Select value={pastorProfile.cargo_ministerial} onValueChange={(value) => handlePastorProfileChange("cargo_ministerial", value)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o cargo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ministerialOptions.map((item) => (
+                              <SelectItem key={item} value={item}>
+                                {item}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Data de nascimento</Label>
+                        <Input type="date" value={pastorProfile.data_nascimento} onChange={(e) => handlePastorProfileChange("data_nascimento", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Data da separação</Label>
+                        <Input type="date" value={pastorProfile.data_ordenacao} onChange={(e) => handlePastorProfileChange("data_ordenacao", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>CEP</Label>
+                        <Input value={pastorProfile.cep} onChange={(e) => void handlePastorCepLookup(e.target.value)} placeholder="00000-000" />
+                        {lookingUpPastorCep && <p className="text-xs text-muted-foreground">Buscando CEP...</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Endereço</Label>
+                        <Input value={pastorProfile.endereco} onChange={(e) => handlePastorProfileChange("endereco", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Número</Label>
+                        <Input value={pastorProfile.numero} onChange={(e) => handlePastorProfileChange("numero", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Complemento</Label>
+                        <Input value={pastorProfile.complemento} onChange={(e) => handlePastorProfileChange("complemento", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Bairro</Label>
+                        <Input value={pastorProfile.bairro} onChange={(e) => handlePastorProfileChange("bairro", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Cidade</Label>
+                        <Input value={pastorProfile.cidade} onChange={(e) => handlePastorProfileChange("cidade", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>UF</Label>
+                        <Input value={pastorProfile.uf} onChange={(e) => handlePastorProfileChange("uf", e.target.value.toUpperCase())} maxLength={2} />
+                      </div>
+                      <div className="sm:col-span-2 flex justify-end">
+                        <Button onClick={() => void handleSavePastorProfile()} disabled={savingPastorProfile} className="gap-2">
+                          {savingPastorProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                          {savingPastorProfile ? "Salvando..." : "Salvar cadastro"}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
             </Tabs>
           </>
         )}
@@ -1201,6 +1596,9 @@ const Index = () => {
                       className="pl-10"
                     />
                   </div>
+                  {letterForm.church_destination.trim().length > 0 && letterForm.church_destination.trim().length < 2 && !letterForm.church_destination_manual.trim() && (
+                    <p className="text-xs text-muted-foreground">Digite pelo menos 2 caracteres para buscar.</p>
+                  )}
                   {filteredPastorDestinationOptions.length > 0 && (
                     <div className="max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-sm">
                       {filteredPastorDestinationOptions.map(({ value, church }) => (
@@ -1221,6 +1619,14 @@ const Index = () => {
                         </button>
                       ))}
                     </div>
+                  )}
+                  {loadingPastorDestinations && (
+                    <p className="text-xs text-muted-foreground">Carregando igrejas do campo da mãe...</p>
+                  )}
+                  {shouldUseParentOriginForDestination && resolvedParentChurch && (
+                    <p className="text-xs text-amber-700">
+                      Destino acima da sua igreja. A origem foi ajustada para a igreja mãe: {resolvedParentChurch.totvs_id} - {resolvedParentChurch.church_name}.
+                    </p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -1316,10 +1722,10 @@ const Index = () => {
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Assinatura responsavel</p>
                   <div className="space-y-2 text-slate-900">
-                    <div className="text-base font-semibold sm:text-lg">{parentChurch?.church_name || activeChurch?.church_name || churchName || "Resolvido pela hierarquia"}</div>
+                    <div className="text-base font-semibold sm:text-lg">{previewSignerName}</div>
                     <div className="flex items-center gap-2 text-slate-600">
                       <Phone className="h-4 w-4 text-slate-400" />
-                      <span>{letterTarget?.telefone || "Definido pela igreja de origem na geracao da carta"}</span>
+                      <span>{previewSignerPhone}</span>
                     </div>
                   </div>
                 </div>

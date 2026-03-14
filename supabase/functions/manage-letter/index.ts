@@ -169,6 +169,7 @@ Deno.serve(async (req) => {
       ]);
 
       const payload = {
+        letter_id: String(letter.id || ""),
         nome: String(letter.preacher_name || ""),
         telefone: String(letter.phone || ""),
         igreja_origem: String(letter.church_origin || ""),
