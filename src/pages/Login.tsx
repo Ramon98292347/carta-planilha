@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { ChurchChoice, clearAppSession, saveAppSession } from "@/lib/appSession"
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
+const SEARCH_CHURCHES_PUBLIC_FUNCTION_NAME = (import.meta.env.VITE_SEARCH_CHURCHES_PUBLIC_FUNCTION_NAME || "search-churches-public").trim();
 
 type LoginResponse =
   | {
@@ -66,6 +67,14 @@ function formatCpf(value: string) {
     .replace(/\.(\d{3})(\d)/, ".$1-$2");
 }
 
+function normalizeMinisterial(value: string) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 const ministerialOptions = ["Membro", "Cooperador", "Diácono", "Presbítero", "Pastor"];
 
 export default function Login() {
@@ -85,6 +94,9 @@ export default function Login() {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupBirthDate, setSignupBirthDate] = useState("");
   const [signupMinisterial, setSignupMinisterial] = useState("");
+  const [signupSacramentalDate, setSignupSacramentalDate] = useState("");
+  const [signupChurchMatches, setSignupChurchMatches] = useState<Array<{ totvs_id: string; church_name: string; class?: string }>>([]);
+  const [searchingChurches, setSearchingChurches] = useState(false);
 
   const openQuickSignup = () => {
     // Comentario: preenchemos alguns campos com o que o usuario ja digitou
@@ -96,8 +108,42 @@ export default function Login() {
     setSignupEmail("");
     setSignupBirthDate("");
     setSignupMinisterial("");
+    setSignupSacramentalDate("");
+    setSignupChurchMatches([]);
     setQuickSignupOpen(true);
   };
+
+  useEffect(() => {
+    const query = onlyDigits(signupTotvs);
+    if (query.length < 3 || !quickSignupOpen) {
+      setSignupChurchMatches([]);
+      setSearchingChurches(false);
+      return;
+    }
+
+    const timer = window.setTimeout(async () => {
+      setSearchingChurches(true);
+      try {
+        const { data, error } = await supabase.functions.invoke<{
+          ok?: boolean;
+          churches?: Array<{ totvs_id: string; church_name: string; class?: string }>;
+        }>(SEARCH_CHURCHES_PUBLIC_FUNCTION_NAME, {
+          body: { query, limit: 8 },
+        });
+
+        if (error || !data?.ok) {
+          setSignupChurchMatches([]);
+          return;
+        }
+
+        setSignupChurchMatches(data.churches || []);
+      } finally {
+        setSearchingChurches(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [signupTotvs, quickSignupOpen]);
 
   const performLogin = async () => {
     const normalizedCpf = onlyDigits(cpf);
@@ -211,6 +257,8 @@ export default function Login() {
           email: signupEmail.trim(),
           birth_date: signupBirthDate || null,
           minister_role: signupMinisterial || null,
+          baptism_date: normalizeMinisterial(signupMinisterial).includes("membro") ? signupSacramentalDate || null : null,
+          ordination_date: normalizeMinisterial(signupMinisterial).includes("membro") ? null : signupSacramentalDate || null,
           default_totvs_id: signupTotvs.trim(),
         },
       });
@@ -382,6 +430,26 @@ export default function Login() {
               onChange={(e) => setSignupTotvs(e.target.value)}
               disabled={signupLoading}
             />
+            {searchingChurches ? (
+              <p className="text-xs text-muted-foreground">Buscando igreja...</p>
+            ) : null}
+            {signupChurchMatches.length > 0 ? (
+              <div className="rounded-md border bg-muted/30 p-2">
+                <p className="mb-2 text-xs text-muted-foreground">Igrejas encontradas</p>
+                <div className="space-y-1">
+                  {signupChurchMatches.map((church) => (
+                    <button
+                      key={`${church.totvs_id}-${church.church_name}`}
+                      type="button"
+                      onClick={() => setSignupTotvs(church.totvs_id)}
+                      className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-muted"
+                    >
+                      <span className="font-medium">{church.totvs_id}</span> - {church.church_name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <Input
               placeholder="Telefone"
               value={signupPhone}
@@ -415,6 +483,17 @@ export default function Login() {
                 type="date"
                 value={signupBirthDate}
                 onChange={(e) => setSignupBirthDate(e.target.value)}
+                disabled={signupLoading}
+              />
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs text-muted-foreground">
+                {normalizeMinisterial(signupMinisterial).includes("membro") ? "Data do batismo" : "Data da separação"}
+              </span>
+              <Input
+                type="date"
+                value={signupSacramentalDate}
+                onChange={(e) => setSignupSacramentalDate(e.target.value)}
                 disabled={signupLoading}
               />
             </div>
@@ -458,3 +537,4 @@ export default function Login() {
     </div>
   );
 }
+

@@ -34,6 +34,7 @@ type UserFormState = {
   minister_role: string;
   password: string;
   birth_date: string;
+  sacramental_date: string;
   is_active: boolean;
   can_create_released_letter: boolean;
 };
@@ -67,6 +68,8 @@ type PastorLetterFormState = {
   preach_period: "MANHA" | "TARDE" | "NOITE";
 };
 
+const ministerialOptions = ["Membro", "Cooperador", "Diácono", "Presbítero", "Pastor"] as const;
+
 const CARTAS_DETAIL_FIELDS = [
   { key: "nome", label: "Nome completo" },
   { key: "telefone", label: "Telefone" },
@@ -93,6 +96,7 @@ const createEmptyUserForm = (role: "pastor" | "obreiro", activeTotvsId: string):
   minister_role: "",
   password: "",
   birth_date: "",
+  sacramental_date: "",
   is_active: true,
   can_create_released_letter: false,
 });
@@ -118,6 +122,13 @@ const createEmptyLetterForm = (): PastorLetterFormState => ({
 });
 
 const normalizeSearch = (value: string) =>
+  (value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const normalizeMinisterRole = (value: string) =>
   (value || "")
     .trim()
     .toLowerCase()
@@ -308,6 +319,10 @@ const Index = () => {
   }, [obreiros]);
 
   const connectedHeader = Boolean(churchName && userName && connected);
+  const sacramentalDateLabel = useMemo(() => {
+    const role = normalizeMinisterRole(userForm.minister_role);
+    return role.includes("membro") ? "Data do batismo" : "Data da separação";
+  }, [userForm.minister_role]);
   const loggedPastorTarget = useMemo<LetterTarget | null>(() => {
     if (userRole !== "pastor") return null;
     return {
@@ -375,6 +390,8 @@ const Index = () => {
         minister_role: userForm.minister_role || null,
         password: userForm.password || null,
         birth_date: userForm.birth_date || null,
+        baptism_date: normalizeMinisterRole(userForm.minister_role).includes("membro") ? userForm.sacramental_date || null : null,
+        ordination_date: normalizeMinisterRole(userForm.minister_role).includes("membro") ? null : userForm.sacramental_date || null,
         is_active: userForm.is_active,
         can_create_released_letter: userForm.can_create_released_letter,
       };
@@ -934,7 +951,7 @@ const Index = () => {
       </main>
 
       <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Cadastrar usuário</DialogTitle>
             <DialogDescription>
@@ -960,7 +977,16 @@ const Index = () => {
             </div>
             <div className="space-y-2">
               <Label>Cargo ministerial</Label>
-              <Input value={userForm.minister_role} onChange={(e) => setUserForm((prev) => ({ ...prev, minister_role: e.target.value }))} placeholder="Pastor, Presbítero, Diácono..." />
+              <Select value={userForm.minister_role} onValueChange={(value) => setUserForm((prev) => ({ ...prev, minister_role: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o cargo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ministerialOptions.map((item) => (
+                    <SelectItem key={item} value={item}>{item}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Senha inicial</Label>
@@ -969,6 +995,10 @@ const Index = () => {
             <div className="space-y-2">
               <Label>Data de nascimento</Label>
               <Input type="date" value={userForm.birth_date} onChange={(e) => setUserForm((prev) => ({ ...prev, birth_date: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>{sacramentalDateLabel}</Label>
+              <Input type="date" value={userForm.sacramental_date} onChange={(e) => setUserForm((prev) => ({ ...prev, sacramental_date: e.target.value }))} />
             </div>
             <div className="space-y-2">
               <Label>TOTVS da igreja</Label>

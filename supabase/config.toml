@@ -16,6 +16,9 @@ verify_jwt = false
 [functions.signup-request]
 verify_jwt = false
 
+[functions.search-churches-public]
+verify_jwt = false
+
 [functions.save-my-profile]
 verify_jwt = false
 
