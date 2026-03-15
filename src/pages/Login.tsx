@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+Ôªøimport { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -76,7 +76,7 @@ function normalizeMinisterial(value: string) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-const ministerialOptions = ["Membro", "Cooperador", "Di√°cono", "Presb√≠tero", "Pastor"];
+const ministerialOptions = ["Membro", "Cooperador", "Diacono", "Presbitero", "Pastor"];
 
 export default function Login() {
   const navigate = useNavigate();
@@ -100,8 +100,6 @@ export default function Login() {
   const [searchingChurches, setSearchingChurches] = useState(false);
 
   const openQuickSignup = () => {
-    // Comentario: preenchemos alguns campos com o que o usuario ja digitou
-    // para reduzir retrabalho no primeiro acesso.
     setSignupCpf(formatCpf(cpf));
     setSignupPhone("");
     setSignupName("");
@@ -151,7 +149,7 @@ export default function Login() {
     if (normalizedCpf.length !== 11 || !password.trim()) return;
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      toast.error("ConfiguraÁ„o do Supabase ausente.");
+      toast.error("Configuracao do Supabase ausente.");
       return;
     }
 
@@ -160,8 +158,6 @@ export default function Login() {
     setChurchChoiceName("");
 
     try {
-      // Comentario: limpamos a sessao anterior antes de iniciar um novo login
-      // para nao misturar dados do banco antigo com o banco novo.
       clearAppSession();
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/login`, {
@@ -178,24 +174,21 @@ export default function Login() {
       if (!response.ok || !result?.ok) {
         const rawMessage = "error" in result ? result.error || result.message || "Falha no login." : "Falha no login.";
         const message = getFriendlyErrorMessage(rawMessage, {
-          fallback: "N„o foi possÌvel entrar agora. Tente novamente.",
+          fallback: "Nao foi possivel entrar agora. Tente novamente.",
         });
         toast.error(message);
         return;
       }
 
       if (result.mode === "select_church") {
-        // Comentario: o backend informou que o usuario tem mais de uma igreja.
-        // Esta tela ainda nao tem a segunda etapa de escolha final, entao
-        // mostramos a lista para o usuario e interrompemos aqui.
         setChurchChoices(result.churches || []);
         setChurchChoiceName(result.user.full_name || "");
-        toast.message("Seu usu·rio tem mais de uma igreja vinculada. Falta sÛ a etapa final de seleÁ„o.");
+        toast.message("Seu usuario tem mais de uma igreja vinculada. Falta so a etapa final de selecao.");
         return;
       }
 
       if (!String(result.rls_token || "").trim()) {
-        toast.error("Login sem rls_token. Configure a ENV SUPABASE_JWT_SECRET na function `login` e publique novamente.");
+        toast.error("Login sem rls_token. Configure a ENV SUPABASE_JWT_SECRET na function login e publique novamente.");
         clearAppSession();
         return;
       }
@@ -216,7 +209,7 @@ export default function Login() {
 
       navigate("/", { replace: true });
     } catch {
-      toast.error("N„o foi possÌvel conectar ao login agora.");
+      toast.error("Nao foi possivel conectar ao login agora.");
     } finally {
       setLoading(false);
     }
@@ -231,7 +224,7 @@ export default function Login() {
     e.preventDefault();
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      toast.error("ConfiguraÁ„o do Supabase ausente.");
+      toast.error("Configuracao do Supabase ausente.");
       return;
     }
 
@@ -270,7 +263,7 @@ export default function Login() {
       if (error || !data?.ok) {
         toast.error(
           getFriendlyErrorMessage(data?.error || error?.message, {
-            fallback: "N„o foi possÌvel enviar a solicitaÁ„o agora.",
+            fallback: "Nao foi possivel enviar a solicitacao agora.",
           }),
         );
         return;
@@ -278,127 +271,173 @@ export default function Login() {
 
       setCpf(formatCpf(onlyDigits(signupCpf)));
       setQuickSignupOpen(false);
-      toast.success(data.message || "Solicita√ß√£o enviada com sucesso.");
+      toast.success(data.message || "Solicitacao enviada com sucesso.");
     } catch {
-      toast.error("N„o foi possÌvel enviar a solicitaÁ„o agora.");
+      toast.error("Nao foi possivel enviar a solicitacao agora.");
     } finally {
       setSignupLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card shadow-sm">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.14),_transparent_34%),linear-gradient(180deg,_#f8fbff_0%,_#eef3f8_48%,_#f7f9fc_100%)]">
+      <header className="border-b border-white/70 bg-white/80 backdrop-blur">
         <div className="container mx-auto flex flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <img src="/app-icon.svg" alt="Logo" className="h-5 w-5" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/20">
+              <img src="/app-icon.svg" alt="Logo" className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-lg font-display font-bold text-foreground sm:text-xl">Painel de Gest√£o</h1>
-              <p className="text-xs text-muted-foreground">Login por CPF e senha</p>
+              <h1 className="text-lg font-display font-bold text-foreground sm:text-xl">Sistema de Cartas</h1>
+              <p className="text-xs text-muted-foreground">Acesso por CPF e senha</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs font-medium text-emerald-700">
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
             <ShieldCheck className="h-4 w-4" />
-            Banco novo conectado
+            Ambiente seguro
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto flex max-w-6xl items-start justify-center px-4 py-6 pb-[calc(2.5rem+2px)]">
-        <Card className="w-full max-w-md shadow-sm">
-          <CardHeader>
-            <CardTitle>Entrar</CardTitle>
-            <CardDescription>
-              Agora o acesso usa <strong>CPF + senha</strong>. O sistema identifica automaticamente se voc√™ √© pastor,
-              obreiro ou admin.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <form onSubmit={handleLogin} className="space-y-3">
-              <div className="space-y-1">
-                <span className="text-xs text-muted-foreground">CPF</span>
-                <Input
-                  placeholder="000.000.000-00"
-                  value={cpf}
-                  onChange={(e) => setCpf(formatCpf(e.target.value))}
-                  disabled={loading}
-                />
-              </div>
+      <main className="container mx-auto grid min-h-[calc(100vh-121px)] max-w-6xl gap-6 px-4 py-6 pb-24 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+        <section className="order-2 space-y-5 lg:order-1">
+          <div className="max-w-2xl space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-primary shadow-sm">
+              Plataforma para igrejas
+            </div>
+            <div className="space-y-3">
+              <h2 className="max-w-xl text-3xl font-display font-extrabold leading-tight text-foreground sm:text-4xl">
+                Emissao e controle de cartas com um acesso simples e organizado.
+              </h2>
+              <p className="max-w-xl text-sm leading-6 text-muted-foreground sm:text-base">
+                Entre no sistema para emitir cartas, acompanhar liberacoes e manter o fluxo do campo de forma clara
+                tanto no computador quanto no celular.
+              </p>
+            </div>
+          </div>
 
-              <div className="space-y-1">
-                <span className="text-xs text-muted-foreground">Senha</span>
-                <div className="relative">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Card className="border-white/70 bg-white/85 shadow-sm">
+              <CardContent className="p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Acesso rapido</p>
+                <p className="mt-2 text-sm font-medium text-foreground">Login com CPF e senha em poucos passos.</p>
+              </CardContent>
+            </Card>
+            <Card className="border-white/70 bg-white/85 shadow-sm">
+              <CardContent className="p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fluxo claro</p>
+                <p className="mt-2 text-sm font-medium text-foreground">Pastor, obreiro e liberacao no mesmo lugar.</p>
+              </CardContent>
+            </Card>
+            <Card className="border-white/70 bg-white/85 shadow-sm">
+              <CardContent className="p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">PDF pronto</p>
+                <p className="mt-2 text-sm font-medium text-foreground">Acompanhe a carta ate a abertura do arquivo.</p>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        <section className="order-1 lg:order-2">
+          <Card className="mx-auto w-full max-w-md border-white/80 bg-white/92 shadow-xl shadow-slate-200/60">
+            <CardHeader className="space-y-3">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                <ShieldCheck className="h-4 w-4" />
+                Entrar no painel
+              </div>
+              <div className="space-y-2">
+                <CardTitle className="text-2xl font-display">Bem-vindo</CardTitle>
+                <CardDescription className="text-sm leading-6">
+                  O sistema identifica automaticamente se voce entra como pastor, obreiro ou administrador.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={handleLogin} className="space-y-3">
+                <div className="space-y-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">CPF</span>
                   <Input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Digite sua senha"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="000.000.000-00"
+                    value={cpf}
+                    onChange={(e) => setCpf(formatCpf(e.target.value))}
                     disabled={loading}
-                    className="pr-10"
+                    className="h-11 bg-white"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground"
-                    aria-label={showPassword ? "Ocultar senha" : "Exibir senha"}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
                 </div>
-              </div>
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={loading || onlyDigits(cpf).length !== 11 || !password.trim()}
-              >
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Entrar
-              </Button>
-            </form>
-
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Primeiro acesso</AlertTitle>
-              <AlertDescription>
-                Se voc√™ ainda n√£o tem usu√°rio, use o cadastro r√°pido. O pedido entra como <strong>pendente</strong> e
-                depois o pastor ou admin revisa sua igreja, seu cargo e suas permiss√µes.
-              </AlertDescription>
-            </Alert>
-
-            <Button type="button" variant="outline" className="w-full" onClick={openQuickSignup}>
-              Cadastro r√°pido
-            </Button>
-
-            {churchChoices.length > 0 ? (
-              <Alert className="border-amber-200 bg-amber-50 text-amber-900">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Sele√ß√£o de igreja pendente</AlertTitle>
-                <AlertDescription className="space-y-2">
-                  <p>
-                    O usu√°rio <strong>{churchChoiceName}</strong> tem acesso a mais de uma igreja. O backend j√° listou
-                    as op√ß√µes abaixo, mas ainda falta ligar a etapa final de escolha no front.
-                  </p>
-                  <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-amber-200 bg-white p-2 text-sm">
-                    {churchChoices.map((church) => (
-                      <div key={`${church.totvs_id}-${church.role}`} className="rounded border p-2">
-                        <div className="font-medium">{church.church_name || church.totvs_id}</div>
-                        <div className="text-xs text-muted-foreground">
-                          TOTVS: {church.totvs_id} | Classe: {church.church_class || "-"} | Papel: {church.role}
-                        </div>
-                      </div>
-                    ))}
+                <div className="space-y-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">Senha</span>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Digite sua senha"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={loading}
+                      className="h-11 bg-white pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground"
+                      aria-label={showPassword ? "Ocultar senha" : "Exibir senha"}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="h-11 w-full"
+                  disabled={loading || onlyDigits(cpf).length !== 11 || !password.trim()}
+                >
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Entrar
+                </Button>
+              </form>
+
+              <Alert className="border-amber-200 bg-amber-50/80 text-amber-950">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Primeiro acesso</AlertTitle>
+                <AlertDescription className="leading-6">
+                  Se voce ainda nao tem usuario, use o cadastro rapido. O pedido entra como <strong>pendente</strong>
+                  e depois o pastor ou admin revisa sua igreja, seu cargo e suas permissoes.
                 </AlertDescription>
               </Alert>
-            ) : null}
-          </CardContent>
-        </Card>
+
+              <Button type="button" variant="outline" className="h-11 w-full" onClick={openQuickSignup}>
+                Cadastro rapido
+              </Button>
+
+              {churchChoices.length > 0 ? (
+                <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Selecao de igreja pendente</AlertTitle>
+                  <AlertDescription className="space-y-2">
+                    <p>
+                      O usuario <strong>{churchChoiceName}</strong> tem acesso a mais de uma igreja. O backend ja listou
+                      as opcoes abaixo, mas ainda falta ligar a etapa final de escolha no front.
+                    </p>
+                    <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-amber-200 bg-white p-2 text-sm">
+                      {churchChoices.map((church) => (
+                        <div key={`${church.totvs_id}-${church.role}`} className="rounded border p-2">
+                          <div className="font-medium">{church.church_name || church.totvs_id}</div>
+                          <div className="text-xs text-muted-foreground">
+                            TOTVS: {church.totvs_id} | Classe: {church.church_class || "-"} | Papel: {church.role}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+            </CardContent>
+          </Card>
+        </section>
       </main>
 
-      <footer className="fixed inset-x-0 bottom-0 border-t bg-card">
+      <footer className="fixed inset-x-0 bottom-0 border-t bg-white/90 backdrop-blur">
         <div className="container mx-auto flex flex-wrap items-center justify-center gap-3 px-2.5 py-2.5 text-center text-xs text-muted-foreground">
           <span>Desenvolvedor: Ramon Rodrigues</span>
           <a href="https://wa.me/5527998292347" target="_blank" rel="noopener noreferrer" className="underline">
@@ -413,9 +452,9 @@ export default function Login() {
       <Dialog open={quickSignupOpen} onOpenChange={setQuickSignupOpen}>
         <DialogContent className="w-[calc(100vw-1rem)] max-w-md p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>Cadastro r√°pido</DialogTitle>
+            <DialogTitle>Cadastro rapido</DialogTitle>
             <DialogDescription>
-              Voc√™ informa seus dados e o TOTVS da igreja. Depois o pastor ou admin decide a libera√ß√£o.
+              Voce informa seus dados e o TOTVS da igreja. Depois o pastor ou admin decide a liberacao.
             </DialogDescription>
           </DialogHeader>
 
@@ -438,9 +477,7 @@ export default function Login() {
               onChange={(e) => setSignupTotvs(e.target.value)}
               disabled={signupLoading}
             />
-            {searchingChurches ? (
-              <p className="text-xs text-muted-foreground">Buscando igreja...</p>
-            ) : null}
+            {searchingChurches ? <p className="text-xs text-muted-foreground">Buscando igreja...</p> : null}
             {signupChurchMatches.length > 0 ? (
               <div className="rounded-md border bg-muted/30 p-2">
                 <p className="mb-2 text-xs text-muted-foreground">Igrejas encontradas</p>
@@ -496,7 +533,7 @@ export default function Login() {
             </div>
             <div className="space-y-1">
               <span className="text-xs text-muted-foreground">
-                {normalizeMinisterial(signupMinisterial).includes("membro") ? "Data do batismo" : "Data da separa√ß√£o"}
+                {normalizeMinisterial(signupMinisterial).includes("membro") ? "Data do batismo" : "Data da separacao"}
               </span>
               <Input
                 type="date"
@@ -537,7 +574,7 @@ export default function Login() {
               }
             >
               {signupLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Enviar solicita√ß√£o
+              Enviar solicitacao
             </Button>
           </form>
         </DialogContent>
@@ -545,6 +582,3 @@ export default function Login() {
     </div>
   );
 }
-
-
-
