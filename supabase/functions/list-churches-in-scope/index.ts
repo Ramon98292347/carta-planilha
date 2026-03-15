@@ -104,7 +104,6 @@ Deno.serve(async (req) => {
   try {
     const session = await verifySessionJWT(req);
     if (!session) return json({ ok: false, error: "unauthorized" }, 401);
-    if (session.role === "obreiro") return json({ ok: false, error: "forbidden" }, 403);
 
     const body = (await req.json().catch(() => ({}))) as Body;
     const page = Number.isFinite(body.page) ? Math.max(1, Number(body.page)) : 1;
@@ -136,6 +135,12 @@ Deno.serve(async (req) => {
       } else {
         scopeList = allRows.map((church) => String(church.totvs_id)).filter(Boolean);
       }
+    } else if (session.role === "obreiro") {
+      if (requestedRoot && requestedRoot !== session.active_totvs_id) {
+        return json({ ok: false, error: "forbidden_church_out_of_scope" }, 403);
+      }
+
+      scopeList = [...computeScope(session.active_totvs_id, allRows)];
     } else {
       const scopeRootTotvs = await resolveScopeRootTotvs(sb, session);
       const baseScope = computeScope(scopeRootTotvs, allRows);

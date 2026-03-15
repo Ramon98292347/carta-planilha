@@ -53,6 +53,7 @@ type PastorLetterDialogProps = {
   previewSignerName: string;
   previewSignerPhone: string;
   creatingLetter: boolean;
+  onResolveManualDestination: (value: string) => Promise<string>;
   onSubmit: () => void;
 };
 
@@ -77,6 +78,7 @@ export function PastorLetterDialog({
   previewSignerName,
   previewSignerPhone,
   creatingLetter,
+  onResolveManualDestination,
   onSubmit,
 }: PastorLetterDialogProps) {
   return (
@@ -210,13 +212,14 @@ export function PastorLetterDialog({
                       church_destination: "",
                     }))
                   }
-                  onBlur={(e) =>
+                  onBlur={async (e) => {
+                    const resolvedValue = await onResolveManualDestination(e.target.value);
                     setLetterForm((prev) => ({
                       ...prev,
-                      church_destination_manual: normalizeManualChurchDestination(e.target.value),
+                      church_destination_manual: resolvedValue,
                       church_destination: "",
-                    }))
-                  }
+                    }));
+                  }}
                   placeholder="Ex.: 9901 - PIUMA-NITEROI"
                   disabled={!!letterForm.church_destination.trim()}
                 />

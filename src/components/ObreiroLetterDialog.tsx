@@ -43,6 +43,7 @@ type ObreiroLetterDialogProps = {
   formatDateBr: (value: string) => string;
   normalizeManualChurchDestination: (value: string) => string;
   creatingLetter: boolean;
+  onResolveManualDestination: (value: string) => Promise<string>;
   onSubmit: () => void;
 };
 
@@ -64,6 +65,7 @@ export function ObreiroLetterDialog({
   formatDateBr,
   normalizeManualChurchDestination,
   creatingLetter,
+  onResolveManualDestination,
   onSubmit,
 }: ObreiroLetterDialogProps) {
   return (
@@ -175,13 +177,14 @@ export function ObreiroLetterDialog({
                 <Input
                   value={letterForm.igreja_destino_manual}
                   onChange={(e) => setLetterForm((prev) => ({ ...prev, igreja_destino_manual: e.target.value, igreja_destino: "" }))}
-                  onBlur={(e) =>
+                  onBlur={async (e) => {
+                    const resolvedValue = await onResolveManualDestination(e.target.value);
                     setLetterForm((prev) => ({
                       ...prev,
-                      igreja_destino_manual: normalizeManualChurchDestination(e.target.value),
+                      igreja_destino_manual: resolvedValue,
                       igreja_destino: "",
-                    }))
-                  }
+                    }));
+                  }}
                   placeholder="Ex.: 9901 - PIUMA-NITEROI"
                   disabled={!!letterForm.igreja_destino.trim()}
                 />

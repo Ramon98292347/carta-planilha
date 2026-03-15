@@ -15,7 +15,7 @@ import { DataTable, CARTAS_COLUMNS, OBREIROS_COLUMNS } from "@/components/DataTa
 import { parseDate } from "@/lib/sheets";
 import { clearAppSession } from "@/lib/appSession";
 import { formatCep, lookupCep, onlyDigits } from "@/lib/cep";
-import { formatDateBr, normalizeManualChurchDestination, normalizeSearch } from "@/lib/churchFormatting";
+import { formatDateBr, normalizeManualChurchDestination, normalizeSearch, parseTotvsFromChurchText } from "@/lib/churchFormatting";
 import { buildChurchLabel, buildChurchTotvsSet, resolveAllowedOriginChurches, resolveParentChurch, resolveSelectedDestinationChurch, shouldUseParentOriginForDestination } from "@/lib/churchScope";
 import { isPastorManagedLetter, isPastorManagedMember } from "@/lib/letterPermissions";
 import { normalizeMinisterialRoleLabel } from "@/lib/ministerialRole";
@@ -560,6 +560,36 @@ const Index = () => {
     } finally {
       setLookingUpPastorCep(false);
     }
+  };
+
+  const resolveManualDestinationLabel = async (rawValue: string) => {
+    const normalizedValue = normalizeManualChurchDestination(rawValue);
+    const typedTotvs = parseTotvsFromChurchText(normalizedValue);
+    const normalizedSearchValue = normalizeSearch(rawValue);
+
+    if (typedTotvs) {
+      const scopedMatch = destinationSourceChurches.find((church) => String(church.totvs_id || "").trim() === typedTotvs);
+      if (scopedMatch) return buildChurchLabel(scopedMatch);
+    }
+
+    const { data, error } = await supabase.functions.invoke<{
+      ok?: boolean;
+      churches?: Array<{ totvs_id: string; church_name: string }>;
+    }>("search-churches-public", {
+      body: { query: rawValue, limit: 5 },
+    });
+
+    if (error || !data?.ok || !data.churches?.length) return normalizedValue;
+
+    const exactMatch = data.churches.find((church) => {
+      const churchTotvs = String(church.totvs_id || "").trim();
+      const churchName = normalizeSearch(String(church.church_name || ""));
+      return (typedTotvs && churchTotvs === typedTotvs) || churchName === normalizedSearchValue;
+    });
+
+    if (exactMatch) return `${exactMatch.totvs_id} - ${exactMatch.church_name}`;
+    if (data.churches.length === 1) return `${data.churches[0].totvs_id} - ${data.churches[0].church_name}`;
+    return normalizedValue;
   };
 
   const handleUserCepLookup = async (value: string) => {
@@ -1194,6 +1224,7 @@ const Index = () => {
         previewSignerName={previewSignerName}
         previewSignerPhone={previewSignerPhone}
         creatingLetter={creatingLetter}
+        onResolveManualDestination={(value) => resolveManualDestinationLabel(value)}
         onSubmit={() => void handleCreateLetter()}
       />
     </div>

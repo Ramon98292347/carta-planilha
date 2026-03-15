@@ -9,7 +9,7 @@ import { ObreiroProfileCard } from "@/components/ObreiroProfileCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { clearAppSession, getAppToken } from "@/lib/appSession";
-import { formatDateBr, normalizeManualChurchDestination } from "@/lib/churchFormatting";
+import { formatDateBr, normalizeManualChurchDestination, normalizeSearch, parseTotvsFromChurchText } from "@/lib/churchFormatting";
 import { formatCep, lookupCep, onlyDigits } from "@/lib/cep";
 import { normalizeMinisterialRoleLabel } from "@/lib/ministerialRole";
 import { supabase } from "@/lib/supabase";
@@ -18,6 +18,7 @@ import { toast } from "sonner";
 const CREATE_LETTER_FUNCTION_NAME = (import.meta.env.VITE_CREATE_LETTER_FUNCTION_NAME || "create-letter").trim();
 const GET_LETTER_PDF_URL_FUNCTION_NAME = (import.meta.env.VITE_GET_LETTER_PDF_URL_FUNCTION_NAME || "get-letter-pdf-url").trim();
 const GET_MY_PROFILE_FUNCTION_NAME = (import.meta.env.VITE_GET_MY_PROFILE_FUNCTION_NAME || "get-my-profile").trim();
+const LIST_CHURCHES_FUNCTION_NAME = (import.meta.env.VITE_LIST_CHURCHES_FUNCTION_NAME || "list-churches-in-scope").trim();
 const LIST_LETTERS_FUNCTION_NAME = (import.meta.env.VITE_LIST_LETTERS_FUNCTION_NAME || "list-letters").trim();
 const LIST_NOTIFICATIONS_FUNCTION_NAME = (import.meta.env.VITE_LIST_NOTIFICATIONS_FUNCTION_NAME || "list-notifications").trim();
 const MARK_NOTIFICATIONS_READ_FUNCTION_NAME = (import.meta.env.VITE_MARK_NOTIFICATIONS_READ_FUNCTION_NAME || "mark-notifications-read").trim();
@@ -297,7 +298,34 @@ export default function Obreiro() {
   };
 
   const loadDestinationOptions = async () => {
-    setDestinationOptions([]);
+    if (!createOpen) {
+      setDestinationOptions([]);
+      return;
+    }
+
+    setSearchingDestinations(true);
+    try {
+      const { data, error } = await supabase.functions.invoke<{
+        ok?: boolean;
+        churches?: Array<{ totvs_id: string; church_name: string }>;
+      }>(LIST_CHURCHES_FUNCTION_NAME, {
+        body: { page: 1, page_size: 1000 },
+      });
+
+      if (error || !data?.ok || !data.churches) {
+        setDestinationOptions([]);
+        return;
+      }
+
+      setDestinationOptions(
+        data.churches.map((church) => ({
+          totvs_church_id: String(church.totvs_id || "").trim(),
+          church_name: String(church.church_name || "").trim(),
+        })),
+      );
+    } finally {
+      setSearchingDestinations(false);
+    }
   };
 
   const loadCards = async () => {
@@ -463,41 +491,43 @@ export default function Obreiro() {
   }, [profile.cep]);
 
   useEffect(() => {
-    const query = onlyDigits(letterForm.igreja_destino);
-    if (query.length < 2 || letterForm.igreja_destino_manual.trim() || !createOpen) {
+    if (!createOpen) {
       setDestinationOptions([]);
-      setSearchingDestinations(false);
       return;
     }
 
-    const timer = window.setTimeout(async () => {
-      setSearchingDestinations(true);
-      try {
-        const { data, error } = await supabase.functions.invoke<{
-          ok?: boolean;
-          churches?: Array<{ totvs_id: string; church_name: string }>;
-        }>(SEARCH_CHURCHES_PUBLIC_FUNCTION_NAME, {
-          body: { query, limit: 12 },
-        });
+    void loadDestinationOptions();
+  }, [createOpen, originTotvs]);
 
-        if (error || !data?.ok) {
-          setDestinationOptions([]);
-          return;
-        }
+  const resolveManualDestinationLabel = async (rawValue: string) => {
+    const normalizedValue = normalizeManualChurchDestination(rawValue);
+    const typedTotvs = parseTotvsFromChurchText(normalizedValue);
+    const normalizedSearchValue = normalizeSearch(rawValue);
 
-        setDestinationOptions(
-          (data.churches || []).map((church) => ({
-            totvs_church_id: String(church.totvs_id || "").trim(),
-            church_name: String(church.church_name || "").trim(),
-          })),
-        );
-      } finally {
-        setSearchingDestinations(false);
-      }
-    }, 250);
+    if (typedTotvs) {
+      const scopedMatch = destinationOptions.find((church) => church.totvs_church_id === typedTotvs);
+      if (scopedMatch) return `${scopedMatch.totvs_church_id} - ${scopedMatch.church_name}`;
+    }
 
-    return () => window.clearTimeout(timer);
-  }, [letterForm.igreja_destino, letterForm.igreja_destino_manual, createOpen]);
+    const { data, error } = await supabase.functions.invoke<{
+      ok?: boolean;
+      churches?: Array<{ totvs_id: string; church_name: string }>;
+    }>(SEARCH_CHURCHES_PUBLIC_FUNCTION_NAME, {
+      body: { query: rawValue, limit: 5 },
+    });
+
+    if (error || !data?.ok || !data.churches?.length) return normalizedValue;
+
+    const exactMatch = data.churches.find((church) => {
+      const churchTotvs = String(church.totvs_id || "").trim();
+      const churchName = normalizeSearch(String(church.church_name || ""));
+      return (typedTotvs && churchTotvs === typedTotvs) || churchName === normalizedSearchValue;
+    });
+
+    if (exactMatch) return `${exactMatch.totvs_id} - ${exactMatch.church_name}`;
+    if (data.churches.length === 1) return `${data.churches[0].totvs_id} - ${data.churches[0].church_name}`;
+    return normalizedValue;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -807,6 +837,7 @@ export default function Obreiro() {
         formatDateBr={formatDateBr}
         normalizeManualChurchDestination={normalizeManualChurchDestination}
         creatingLetter={creatingLetter}
+        onResolveManualDestination={(value) => resolveManualDestinationLabel(value)}
         onSubmit={() => void handleCreateLetter()}
       />
     </div>
