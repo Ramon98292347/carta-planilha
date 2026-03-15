@@ -5,6 +5,8 @@ import { AlertCircle, Bell, Building2, CalendarDays, CheckCircle2, Download, Fil
 
 import { useSheetData } from "@/hooks/useSheetData";
 import { MetricCards } from "@/components/MetricCards";
+import { AdminChurchDialog } from "@/components/AdminChurchDialog";
+import { AdminUserDialog } from "@/components/AdminUserDialog";
 import { PastorLetterDialog } from "@/components/PastorLetterDialog";
 import { PastorProfileCard } from "@/components/PastorProfileCard";
 import { Filters, FilterValues, emptyFilters } from "@/components/Filters";
@@ -19,7 +21,6 @@ import { buildPastorCartaRowActions } from "@/lib/pastorCartaActions";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1188,184 +1189,26 @@ const Index = () => {
         )}
       </main>
 
-      <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
-        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Cadastrar usuário</DialogTitle>
-            <DialogDescription>
-              O role define acesso. O cargo ministerial fica no campo separado para manter a regra do sistema limpa.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>CPF</Label>
-              <Input value={userForm.cpf} onChange={(e) => setUserForm((prev) => ({ ...prev, cpf: e.target.value }))} placeholder="00000000000" />
-            </div>
-            <div className="space-y-2">
-              <Label>Nome completo</Label>
-              <Input value={userForm.full_name} onChange={(e) => setUserForm((prev) => ({ ...prev, full_name: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Telefone</Label>
-              <Input value={userForm.phone} onChange={(e) => setUserForm((prev) => ({ ...prev, phone: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input value={userForm.email} onChange={(e) => setUserForm((prev) => ({ ...prev, email: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Cargo ministerial</Label>
-              <Select value={userForm.minister_role} onValueChange={(value) => setUserForm((prev) => ({ ...prev, minister_role: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o cargo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ministerialOptions.map((item) => (
-                    <SelectItem key={item} value={item}>{item}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Senha inicial</Label>
-              <Input type="password" value={userForm.password} onChange={(e) => setUserForm((prev) => ({ ...prev, password: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Data de nascimento</Label>
-              <Input type="date" value={userForm.birth_date} onChange={(e) => setUserForm((prev) => ({ ...prev, birth_date: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>{sacramentalDateLabel}</Label>
-              <Input type="date" value={userForm.sacramental_date} onChange={(e) => setUserForm((prev) => ({ ...prev, sacramental_date: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>TOTVS da igreja</Label>
-              <Input value={userForm.default_totvs_id} onChange={(e) => setUserForm((prev) => ({ ...prev, default_totvs_id: e.target.value }))} />
-            </div>
-            {userRole === "admin" && (
-              <div className="space-y-2">
-                <Label>Role</Label>
-                <Select value={userForm.role} onValueChange={(value: "pastor" | "obreiro") => setUserForm((prev) => ({ ...prev, role: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="obreiro">Obreiro</SelectItem>
-                    <SelectItem value="pastor">Pastor</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label>Status inicial</Label>
-              <Select value={userForm.is_active ? "ativo" : "inativo"} onValueChange={(value) => setUserForm((prev) => ({ ...prev, is_active: value === "ativo" }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ativo">Ativo</SelectItem>
-                  <SelectItem value="inativo">Inativo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Liberacao automatica</Label>
-              <Select
-                value={userForm.can_create_released_letter ? "on" : "off"}
-                onValueChange={(value) => setUserForm((prev) => ({ ...prev, can_create_released_letter: value === "on" }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a liberacao" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="off">OFF</SelectItem>
-                  <SelectItem value="on">ON</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setUserDialogOpen(false)} disabled={savingUser}>Cancelar</Button>
-            <Button onClick={handleSaveUser} disabled={savingUser}>
-              {savingUser ? "Salvando..." : "Salvar usuário"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AdminUserDialog
+        open={userDialogOpen}
+        onOpenChange={setUserDialogOpen}
+        userForm={userForm}
+        setUserForm={setUserForm}
+        ministerialOptions={ministerialOptions}
+        sacramentalDateLabel={sacramentalDateLabel}
+        userRole={userRole}
+        saving={savingUser}
+        onSave={handleSaveUser}
+      />
 
-      <Dialog open={churchDialogOpen} onOpenChange={setChurchDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Cadastrar igreja</DialogTitle>
-            <DialogDescription>
-              Aqui a gente grava a igreja na hierarquia nova. O parent TOTVS define em qual nível ela entra.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>TOTVS</Label>
-              <Input value={churchForm.totvs_id} onChange={(e) => setChurchForm((prev) => ({ ...prev, totvs_id: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Nome da igreja</Label>
-              <Input value={churchForm.church_name} onChange={(e) => setChurchForm((prev) => ({ ...prev, church_name: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Classe</Label>
-              <Select value={churchForm.class} onValueChange={(value: ChurchFormState["class"]) => setChurchForm((prev) => ({ ...prev, class: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a classe" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="estadual">Estadual</SelectItem>
-                  <SelectItem value="setorial">Setorial</SelectItem>
-                  <SelectItem value="central">Central</SelectItem>
-                  <SelectItem value="regional">Regional</SelectItem>
-                  <SelectItem value="local">Local</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Parent TOTVS</Label>
-              <Input value={churchForm.parent_totvs_id} onChange={(e) => setChurchForm((prev) => ({ ...prev, parent_totvs_id: e.target.value }))} disabled={churchForm.class === "estadual"} />
-            </div>
-            <div className="space-y-2">
-              <Label>Email de contato</Label>
-              <Input value={churchForm.contact_email} onChange={(e) => setChurchForm((prev) => ({ ...prev, contact_email: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Telefone de contato</Label>
-              <Input value={churchForm.contact_phone} onChange={(e) => setChurchForm((prev) => ({ ...prev, contact_phone: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Cidade</Label>
-              <Input value={churchForm.address_city} onChange={(e) => setChurchForm((prev) => ({ ...prev, address_city: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>UF</Label>
-              <Input value={churchForm.address_state} onChange={(e) => setChurchForm((prev) => ({ ...prev, address_state: e.target.value }))} maxLength={2} />
-            </div>
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <Select value={churchForm.is_active ? "ativo" : "inativo"} onValueChange={(value) => setChurchForm((prev) => ({ ...prev, is_active: value === "ativo" }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ativo">Ativa</SelectItem>
-                  <SelectItem value="inativo">Inativa</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setChurchDialogOpen(false)} disabled={savingChurch}>Cancelar</Button>
-            <Button onClick={handleSaveChurch} disabled={savingChurch}>
-              {savingChurch ? "Salvando..." : "Salvar igreja"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AdminChurchDialog
+        open={churchDialogOpen}
+        onOpenChange={setChurchDialogOpen}
+        churchForm={churchForm}
+        setChurchForm={setChurchForm}
+        saving={savingChurch}
+        onSave={handleSaveChurch}
+      />
 
       <PastorLetterDialog
         open={letterDialogOpen}
