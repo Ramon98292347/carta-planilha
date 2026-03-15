@@ -114,7 +114,7 @@ export default function Login() {
 
   useEffect(() => {
     const query = onlyDigits(signupTotvs);
-    if (query.length < 3 || !quickSignupOpen) {
+    if (query.length < 2 || !quickSignupOpen) {
       setSignupChurchMatches([]);
       setSearchingChurches(false);
       return;
