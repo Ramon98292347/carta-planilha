@@ -390,6 +390,9 @@ export function DataTable({
     }
   };
 
+  const deleteKey = (row: Record<string, string>) =>
+    [row.doc_id, row.url_pdf, row.data_emissao, row.nome].map((v) => (v || "").trim()).join("|").toLowerCase();
+
   const actionContext = {
     resolveRow,
     callLettersWebhook,
@@ -453,9 +456,6 @@ export function DataTable({
       autoSendTimersRef.current = {};
     };
   }, []);
-
-  const deleteKey = (row: Record<string, string>) =>
-    [row.doc_id, row.url_pdf, row.data_emissao, row.nome].map((v) => (v || "").trim()).join("|").toLowerCase();
 
   const deleteCarta = async (row: Record<string, string>) => {
     return deleteCartaAction(row, actionContext);
