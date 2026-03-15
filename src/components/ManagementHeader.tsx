@@ -86,6 +86,36 @@ export function ManagementHeader({
                 Divulgação
               </Button>
             )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" className="relative h-10 w-10 p-0">
+                  <Bell className="h-4 w-4" />
+                  {notifications.length > 0 && (
+                    <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+                      {notifications.length}
+                    </span>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80">
+                <DropdownMenuLabel>Notificações</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {notifications.length === 0 ? (
+                  <DropdownMenuItem className="text-muted-foreground">Sem notificações</DropdownMenuItem>
+                ) : (
+                  notifications.slice(0, 8).map((n) => (
+                    <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1">
+                      <span className="text-xs font-semibold">{n.title}</span>
+                      <span className="text-xs text-muted-foreground">{n.body || "Sem mensagem adicional"}</span>
+                    </DropdownMenuItem>
+                  ))
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onClearNotifications} className="text-xs text-rose-700">
+                  Marcar como lidas
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           <div className="flex items-center gap-2 sm:hidden">
@@ -162,3 +192,4 @@ export function ManagementHeader({
     </header>
   );
 }
+
