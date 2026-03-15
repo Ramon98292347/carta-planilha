@@ -83,9 +83,12 @@ export function ManagementHeader({
             )}
             {userRole !== "obreiro" && (
               <Button type="button" variant="outline" onClick={onOpenDivulgacao}>
-                Divulgação
+                Divulgacao
               </Button>
             )}
+            <Button type="button" variant="outline" onClick={onLogout} className="gap-1">
+              <LogOut className="h-4 w-4" /> Sair
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" variant="outline" className="relative h-10 w-10 p-0">
@@ -192,4 +195,5 @@ export function ManagementHeader({
     </header>
   );
 }
+
 

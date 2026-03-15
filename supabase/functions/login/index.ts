@@ -20,6 +20,33 @@ function onlyDigits(value: string) {
   return String(value || "").replace(/\D+/g, "");
 }
 
+function isValidCpf(value: string) {
+  const cpf = onlyDigits(value);
+
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+
+  let sum = 0;
+  for (let i = 0; i < 9; i += 1) {
+    sum += Number(cpf[i]) * (10 - i);
+  }
+
+  let firstDigit = (sum * 10) % 11;
+  if (firstDigit === 10) firstDigit = 0;
+  if (firstDigit !== Number(cpf[9])) return false;
+
+  sum = 0;
+  for (let i = 0; i < 10; i += 1) {
+    sum += Number(cpf[i]) * (11 - i);
+  }
+
+  let secondDigit = (sum * 10) % 11;
+  if (secondDigit === 10) secondDigit = 0;
+  if (secondDigit !== Number(cpf[10])) return false;
+
+  return true;
+}
+
 type TotvsAccessItem = string | { totvs_id?: string; role?: string };
 type ChurchRow = { totvs_id: string; parent_totvs_id: string | null };
 type Body = { cpf?: string; password?: string };
@@ -148,7 +175,7 @@ Deno.serve(async (req) => {
     const cpf = onlyDigits(body.cpf || "");
     const password = String(body.password || "");
 
-    if (cpf.length !== 11) return json({ ok: false, error: "invalid_cpf" }, 400);
+    if (!isValidCpf(cpf)) return json({ ok: false, error: "invalid_cpf" }, 400);
     if (!password) return json({ ok: false, error: "missing_password" }, 400);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";

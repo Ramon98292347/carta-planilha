@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 import { ChurchChoice, clearAppSession, saveAppSession } from "@/lib/appSession";
+import { formatCep, lookupCep } from "@/lib/cep";
+import { isValidCpf } from "@/lib/cpf";
 import { getFriendlyErrorMessage } from "@/lib/friendlyErrorMessages";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
@@ -96,8 +98,15 @@ export default function Login() {
   const [signupBirthDate, setSignupBirthDate] = useState("");
   const [signupMinisterial, setSignupMinisterial] = useState("");
   const [signupSacramentalDate, setSignupSacramentalDate] = useState("");
+  const [signupCep, setSignupCep] = useState("");
+  const [signupStreet, setSignupStreet] = useState("");
+  const [signupNumber, setSignupNumber] = useState("");
+  const [signupNeighborhood, setSignupNeighborhood] = useState("");
+  const [signupCity, setSignupCity] = useState("");
+  const [signupState, setSignupState] = useState("");
   const [signupChurchMatches, setSignupChurchMatches] = useState<Array<{ totvs_id: string; church_name: string; class?: string }>>([]);
   const [searchingChurches, setSearchingChurches] = useState(false);
+  const [lookingUpCep, setLookingUpCep] = useState(false);
 
   const openQuickSignup = () => {
     setSignupCpf(formatCpf(cpf));
@@ -108,6 +117,12 @@ export default function Login() {
     setSignupBirthDate("");
     setSignupMinisterial("");
     setSignupSacramentalDate("");
+    setSignupCep("");
+    setSignupStreet("");
+    setSignupNumber("");
+    setSignupNeighborhood("");
+    setSignupCity("");
+    setSignupState("");
     setSignupChurchMatches([]);
     setQuickSignupOpen(true);
   };
@@ -144,9 +159,48 @@ export default function Login() {
     return () => window.clearTimeout(timer);
   }, [signupTotvs, quickSignupOpen]);
 
+  useEffect(() => {
+    const cep = onlyDigits(signupCep);
+    if (cep.length !== 8 || !quickSignupOpen) return;
+
+    let active = true;
+    setLookingUpCep(true);
+
+    void lookupCep(cep)
+      .then((result) => {
+        if (!active) return;
+        if (!result) {
+          toast.error("CEP nao encontrado.");
+          return;
+        }
+
+        setSignupCep(result.cep || formatCep(cep));
+        setSignupStreet(result.street || "");
+        setSignupNeighborhood(result.neighborhood || "");
+        setSignupCity(result.city || "");
+        setSignupState(result.state || "");
+      })
+      .catch((err) => {
+        if (!active) return;
+        toast.error(err instanceof Error ? err.message : "Nao foi possivel consultar o CEP.");
+      })
+      .finally(() => {
+        if (active) setLookingUpCep(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [signupCep, quickSignupOpen]);
+
   const performLogin = async () => {
     const normalizedCpf = onlyDigits(cpf);
     if (normalizedCpf.length !== 11 || !password.trim()) return;
+
+    if (!isValidCpf(normalizedCpf)) {
+      toast.error("Digite um CPF valido para entrar.");
+      return;
+    }
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       toast.error("Configuracao do Supabase ausente.");
@@ -239,6 +293,11 @@ export default function Login() {
       return;
     }
 
+    if (!isValidCpf(signupCpf)) {
+      toast.error("Digite um CPF valido para enviar a solicitacao.");
+      return;
+    }
+
     setSignupLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke<{
@@ -256,11 +315,24 @@ export default function Login() {
           minister_role: signupMinisterial || null,
           baptism_date: normalizeMinisterial(signupMinisterial).includes("membro") ? signupSacramentalDate || null : null,
           ordination_date: normalizeMinisterial(signupMinisterial).includes("membro") ? null : signupSacramentalDate || null,
+          cep: signupCep.trim() || null,
+          address_street: signupStreet.trim() || null,
+          address_number: signupNumber.trim() || null,
+          address_neighborhood: signupNeighborhood.trim() || null,
+          address_city: signupCity.trim() || null,
+          address_state: signupState.trim() || null,
           default_totvs_id: signupTotvs.trim(),
         },
       });
 
       if (error || !data?.ok) {
+        if (data?.error === "cpf_already_registered") {
+          setCpf(formatCpf(onlyDigits(signupCpf)));
+          setQuickSignupOpen(false);
+          toast.message("Esse CPF ja possui cadastro. Agora e so entrar com a sua senha.");
+          return;
+        }
+
         toast.error(
           getFriendlyErrorMessage(data?.error || error?.message, {
             fallback: "Nao foi possivel enviar a solicitacao agora.",
@@ -450,7 +522,7 @@ export default function Login() {
       </footer>
 
       <Dialog open={quickSignupOpen} onOpenChange={setQuickSignupOpen}>
-        <DialogContent className="w-[calc(100vw-1rem)] max-w-md p-4 sm:p-6">
+        <DialogContent className="max-h-[88vh] w-[calc(100vw-1rem)] max-w-md overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Cadastro rapido</DialogTitle>
             <DialogDescription>
@@ -499,6 +571,27 @@ export default function Login() {
               placeholder="Telefone"
               value={signupPhone}
               onChange={(e) => setSignupPhone(e.target.value)}
+              disabled={signupLoading}
+            />
+            <Input
+              placeholder="CEP"
+              value={signupCep}
+              onChange={(e) => setSignupCep(formatCep(e.target.value))}
+              disabled={signupLoading}
+            />
+            {lookingUpCep ? <p className="text-xs text-muted-foreground">Consultando CEP...</p> : null}
+            {signupStreet || signupNeighborhood || signupCity || signupState ? (
+              <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                <p className="font-medium text-foreground">{signupStreet || "Endereco localizado"}</p>
+                <p className="text-muted-foreground">
+                  {[signupNeighborhood, signupCity, signupState].filter(Boolean).join(" - ") || "Endereco preenchido pelo CEP"}
+                </p>
+              </div>
+            ) : null}
+            <Input
+              placeholder="Numero"
+              value={signupNumber}
+              onChange={(e) => setSignupNumber(e.target.value)}
               disabled={signupLoading}
             />
             <Input
