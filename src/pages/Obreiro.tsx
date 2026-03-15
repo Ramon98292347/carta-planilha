@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { clearAppSession, getAppToken } from "@/lib/appSession";
 import { formatDateBr, normalizeManualChurchDestination } from "@/lib/churchFormatting";
 import { formatCep, lookupCep, onlyDigits } from "@/lib/cep";
+import { normalizeMinisterialRoleLabel } from "@/lib/ministerialRole";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
@@ -163,7 +164,9 @@ const readProfileFromStorage = (): ObreiroProfile => ({
   status_carta: (localStorage.getItem("obreiro_status_carta") || "GERADA").trim(),
   data_nascimento: (localStorage.getItem("obreiro_data_nascimento") || "").trim(),
   data_ordenacao: (localStorage.getItem("obreiro_data_ordenacao") || "").trim(),
-  cargo_ministerial: (localStorage.getItem("obreiro_cargo_ministerial") || localStorage.getItem("minister_role") || "").trim(),
+  cargo_ministerial: normalizeMinisterialRoleLabel(
+    localStorage.getItem("obreiro_cargo_ministerial") || localStorage.getItem("minister_role") || "",
+  ),
   cep: (localStorage.getItem("obreiro_cep") || "").trim(),
   endereco: (localStorage.getItem("obreiro_endereco") || "").trim(),
   numero: (localStorage.getItem("obreiro_numero") || "").trim(),
@@ -183,7 +186,7 @@ const mapSavedProfileToObreiroProfile = (input: Record<string, unknown>, fallbac
   status_carta: Boolean(input.can_create_released_letter) ? "LIBERADA" : (fallback.status_carta || "GERADA"),
   data_nascimento: String(input.birth_date || fallback.data_nascimento || "").trim(),
   data_ordenacao: String(input.ordination_date || fallback.data_ordenacao || "").trim(),
-  cargo_ministerial: String(input.minister_role || fallback.cargo_ministerial || "").trim(),
+  cargo_ministerial: normalizeMinisterialRoleLabel(input.minister_role, fallback.cargo_ministerial),
   cep: String(input.cep || fallback.cep || "").trim(),
   endereco: String(input.address_street || fallback.endereco || "").trim(),
   numero: String(input.address_number || fallback.numero || "").trim(),
@@ -194,6 +197,7 @@ const mapSavedProfileToObreiroProfile = (input: Record<string, unknown>, fallbac
 });
 
 const writeProfileToStorage = (profile: ObreiroProfile) => {
+  const ministerialRole = normalizeMinisterialRoleLabel(profile.cargo_ministerial);
   localStorage.setItem("obreiro_nome", profile.nome || "");
   localStorage.setItem("obreiro_telefone", profile.telefone || "");
   localStorage.setItem("obreiro_status", profile.status || "");
@@ -201,7 +205,8 @@ const writeProfileToStorage = (profile: ObreiroProfile) => {
   localStorage.setItem("obreiro_email", profile.email || "");
   localStorage.setItem("obreiro_data_nascimento", profile.data_nascimento || "");
   localStorage.setItem("obreiro_data_ordenacao", profile.data_ordenacao || "");
-  localStorage.setItem("obreiro_cargo_ministerial", profile.cargo_ministerial || "");
+  localStorage.setItem("obreiro_cargo_ministerial", ministerialRole);
+  localStorage.setItem("minister_role", ministerialRole);
   localStorage.setItem("obreiro_cep", profile.cep || "");
   localStorage.setItem("obreiro_endereco", profile.endereco || "");
   localStorage.setItem("obreiro_numero", profile.numero || "");
@@ -431,7 +436,7 @@ export default function Obreiro() {
     try {
       const result = await lookupCep(cep);
       if (!result) {
-        toast.error("CEP nao encontrado.");
+        toast.error("CEP nao encontrado. Voce pode preencher o endereco manualmente.");
         return;
       }
 
@@ -599,7 +604,7 @@ export default function Obreiro() {
           email: profile.email.trim(),
           birth_date: profile.data_nascimento.trim() || null,
           ordination_date: profile.data_ordenacao.trim() || null,
-          minister_role: profile.cargo_ministerial.trim() || null,
+          minister_role: normalizeMinisterialRoleLabel(profile.cargo_ministerial).trim() || null,
           cep: profile.cep.trim() || null,
           address_street: profile.endereco.trim() || null,
           address_number: profile.numero.trim() || null,

@@ -104,6 +104,7 @@ export default function Login() {
   const [signupNeighborhood, setSignupNeighborhood] = useState("");
   const [signupCity, setSignupCity] = useState("");
   const [signupState, setSignupState] = useState("");
+  const [signupManualAddress, setSignupManualAddress] = useState(false);
   const [signupChurchMatches, setSignupChurchMatches] = useState<Array<{ totvs_id: string; church_name: string; class?: string }>>([]);
   const [searchingChurches, setSearchingChurches] = useState(false);
   const [lookingUpCep, setLookingUpCep] = useState(false);
@@ -123,6 +124,7 @@ export default function Login() {
     setSignupNeighborhood("");
     setSignupCity("");
     setSignupState("");
+    setSignupManualAddress(false);
     setSignupChurchMatches([]);
     setQuickSignupOpen(true);
   };
@@ -170,7 +172,8 @@ export default function Login() {
       .then((result) => {
         if (!active) return;
         if (!result) {
-          toast.error("CEP nao encontrado.");
+          setSignupManualAddress(true);
+          toast.error("CEP nao encontrado. Preencha o endereco manualmente.");
           return;
         }
 
@@ -179,9 +182,11 @@ export default function Login() {
         setSignupNeighborhood(result.neighborhood || "");
         setSignupCity(result.city || "");
         setSignupState(result.state || "");
+        setSignupManualAddress(false);
       })
       .catch((err) => {
         if (!active) return;
+        setSignupManualAddress(true);
         toast.error(err instanceof Error ? err.message : "Nao foi possivel consultar o CEP.");
       })
       .finally(() => {
@@ -587,6 +592,35 @@ export default function Login() {
                   {[signupNeighborhood, signupCity, signupState].filter(Boolean).join(" - ") || "Endereco preenchido pelo CEP"}
                 </p>
               </div>
+            ) : null}
+            {signupManualAddress ? (
+              <>
+                <Input
+                  placeholder="Endereco"
+                  value={signupStreet}
+                  onChange={(e) => setSignupStreet(e.target.value)}
+                  disabled={signupLoading}
+                />
+                <Input
+                  placeholder="Bairro"
+                  value={signupNeighborhood}
+                  onChange={(e) => setSignupNeighborhood(e.target.value)}
+                  disabled={signupLoading}
+                />
+                <Input
+                  placeholder="Cidade"
+                  value={signupCity}
+                  onChange={(e) => setSignupCity(e.target.value)}
+                  disabled={signupLoading}
+                />
+                <Input
+                  placeholder="UF"
+                  value={signupState}
+                  onChange={(e) => setSignupState(e.target.value.toUpperCase().slice(0, 2))}
+                  disabled={signupLoading}
+                  maxLength={2}
+                />
+              </>
             ) : null}
             <Input
               placeholder="Numero"

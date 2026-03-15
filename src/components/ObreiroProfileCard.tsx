@@ -85,6 +85,9 @@ export function ObreiroProfileCard({
           <Label htmlFor="cep">CEP</Label>
           <Input id="cep" value={profile.cep} onChange={(e) => onChange("cep", e.target.value)} placeholder="00000-000" />
           {lookingUpCep && <p className="text-xs text-muted-foreground">Buscando endereco pelo CEP...</p>}
+          {!lookingUpCep && !profile.endereco && onlyDigits(profile.cep).length === 8 ? (
+            <p className="text-xs text-muted-foreground">Se o CEP nao localizar, preencha o endereco manualmente abaixo.</p>
+          ) : null}
         </div>
         <div className="space-y-2 md:col-span-2">
           <Label htmlFor="endereco">Endereco</Label>

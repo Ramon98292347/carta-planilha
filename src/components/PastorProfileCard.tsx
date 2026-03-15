@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { onlyDigits } from "@/lib/cep";
 
 type PastorProfileState = {
   nome: string;
@@ -89,6 +90,9 @@ export function PastorProfileCard({
           <Label>CEP</Label>
           <Input value={profile.cep} onChange={(e) => onCepChange(e.target.value)} placeholder="00000-000" />
           {lookingUpCep && <p className="text-xs text-muted-foreground">Buscando CEP...</p>}
+          {!lookingUpCep && !profile.endereco && onlyDigits(profile.cep).length === 8 ? (
+            <p className="text-xs text-muted-foreground">Se o CEP nao localizar, preencha o endereco manualmente abaixo.</p>
+          ) : null}
         </div>
         <div className="space-y-2">
           <Label>Endereço</Label>

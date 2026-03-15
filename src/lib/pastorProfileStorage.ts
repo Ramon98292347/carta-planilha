@@ -1,4 +1,5 @@
 import { onlyDigits } from "@/lib/cep";
+import { normalizeMinisterialRoleLabel } from "@/lib/ministerialRole";
 
 export type PastorProfileState = {
   nome: string;
@@ -22,7 +23,10 @@ export const readPastorProfileFromStorage = (): PastorProfileState => ({
   email: (localStorage.getItem("user_email") || "").trim(),
   data_nascimento: (localStorage.getItem("pastor_data_nascimento") || "").trim(),
   data_ordenacao: (localStorage.getItem("pastor_data_ordenacao") || "").trim(),
-  cargo_ministerial: (localStorage.getItem("minister_role") || localStorage.getItem("pastor_minister_role") || "Pastor").trim(),
+  cargo_ministerial: normalizeMinisterialRoleLabel(
+    localStorage.getItem("minister_role") || localStorage.getItem("pastor_minister_role") || "Pastor",
+    "Pastor",
+  ),
   cep: (localStorage.getItem("pastor_cep") || "").trim(),
   endereco: (localStorage.getItem("pastor_endereco") || "").trim(),
   numero: (localStorage.getItem("pastor_numero") || "").trim(),
@@ -39,7 +43,7 @@ export const mapSavedProfileToPastorProfile = (input: Record<string, unknown>, f
   email: String(input.email || fallback.email || "").trim(),
   data_nascimento: String(input.birth_date || fallback.data_nascimento || "").trim(),
   data_ordenacao: String(input.ordination_date || fallback.data_ordenacao || "").trim(),
-  cargo_ministerial: String(input.minister_role || fallback.cargo_ministerial || "").trim(),
+  cargo_ministerial: normalizeMinisterialRoleLabel(input.minister_role, fallback.cargo_ministerial),
   cep: String(input.cep || fallback.cep || "").trim(),
   endereco: String(input.address_street || fallback.endereco || "").trim(),
   numero: String(input.address_number || fallback.numero || "").trim(),
@@ -50,13 +54,14 @@ export const mapSavedProfileToPastorProfile = (input: Record<string, unknown>, f
 });
 
 export const writePastorProfileToStorage = (profile: PastorProfileState) => {
+  const ministerialRole = normalizeMinisterialRoleLabel(profile.cargo_ministerial, "Pastor");
   localStorage.setItem("user_name", profile.nome || "");
   localStorage.setItem("pastor_name", profile.nome || "");
   localStorage.setItem("user_phone", profile.telefone || "");
   localStorage.setItem("pastor_phone", profile.telefone || "");
   localStorage.setItem("user_email", profile.email || "");
-  localStorage.setItem("minister_role", profile.cargo_ministerial || "");
-  localStorage.setItem("pastor_minister_role", profile.cargo_ministerial || "");
+  localStorage.setItem("minister_role", ministerialRole);
+  localStorage.setItem("pastor_minister_role", ministerialRole);
   localStorage.setItem("pastor_data_nascimento", profile.data_nascimento || "");
   localStorage.setItem("pastor_data_ordenacao", profile.data_ordenacao || "");
   localStorage.setItem("pastor_cep", profile.cep || "");

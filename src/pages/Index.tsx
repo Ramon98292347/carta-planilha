@@ -18,6 +18,7 @@ import { formatCep, lookupCep, onlyDigits } from "@/lib/cep";
 import { formatDateBr, normalizeManualChurchDestination, normalizeSearch } from "@/lib/churchFormatting";
 import { buildChurchLabel, buildChurchTotvsSet, resolveAllowedOriginChurches, resolveParentChurch, resolveSelectedDestinationChurch, shouldUseParentOriginForDestination } from "@/lib/churchScope";
 import { isPastorManagedLetter, isPastorManagedMember } from "@/lib/letterPermissions";
+import { normalizeMinisterialRoleLabel } from "@/lib/ministerialRole";
 import { buildPastorCartaRowActions } from "@/lib/pastorCartaActions";
 import { mapSavedProfileToPastorProfile, readPastorProfileFromStorage, type PastorProfileState, writePastorProfileToStorage } from "@/lib/pastorProfileStorage";
 import { supabase } from "@/lib/supabase";
@@ -41,6 +42,12 @@ type UserFormState = {
   phone: string;
   email: string;
   minister_role: string;
+  cep: string;
+  address_street: string;
+  address_neighborhood: string;
+  address_city: string;
+  address_state: string;
+  address_number: string;
   password: string;
   birth_date: string;
   sacramental_date: string;
@@ -55,6 +62,10 @@ type ChurchFormState = {
   parent_totvs_id: string;
   contact_email: string;
   contact_phone: string;
+  cep: string;
+  address_street: string;
+  address_neighborhood: string;
+  address_number: string;
   address_city: string;
   address_state: string;
   is_active: boolean;
@@ -112,6 +123,12 @@ const createEmptyUserForm = (role: "pastor" | "obreiro", activeTotvsId: string):
   phone: "",
   email: "",
   minister_role: "",
+  cep: "",
+  address_street: "",
+  address_neighborhood: "",
+  address_city: "",
+  address_state: "",
+  address_number: "",
   password: "",
   birth_date: "",
   sacramental_date: "",
@@ -126,6 +143,10 @@ const createEmptyChurchForm = (activeTotvsId: string): ChurchFormState => ({
   parent_totvs_id: activeTotvsId,
   contact_email: "",
   contact_phone: "",
+  cep: "",
+  address_street: "",
+  address_neighborhood: "",
+  address_number: "",
   address_city: "",
   address_state: "",
   is_active: true,
@@ -190,6 +211,10 @@ const Index = () => {
   const [churchDialogOpen, setChurchDialogOpen] = useState(false);
   const [savingUser, setSavingUser] = useState(false);
   const [savingChurch, setSavingChurch] = useState(false);
+  const [lookingUpUserCep, setLookingUpUserCep] = useState(false);
+  const [lookingUpChurchCep, setLookingUpChurchCep] = useState(false);
+  const [showManualUserAddress, setShowManualUserAddress] = useState(false);
+  const [showManualChurchAddress, setShowManualChurchAddress] = useState(false);
   const [letterDialogOpen, setLetterDialogOpen] = useState(false);
   const [creatingLetter, setCreatingLetter] = useState(false);
   const [letterTarget, setLetterTarget] = useState<LetterTarget | null>(null);
@@ -232,12 +257,14 @@ const Index = () => {
   useEffect(() => {
     if (userDialogOpen) {
       setUserForm(createEmptyUserForm(userRole === "admin" ? "obreiro" : "obreiro", activeTotvsId));
+      setShowManualUserAddress(false);
     }
   }, [userDialogOpen, activeTotvsId, userRole]);
 
   useEffect(() => {
     if (churchDialogOpen) {
       setChurchForm(createEmptyChurchForm(activeTotvsId));
+      setShowManualChurchAddress(false);
     }
   }, [churchDialogOpen, activeTotvsId]);
 
@@ -516,7 +543,7 @@ const Index = () => {
     try {
       const result = await lookupCep(formatted);
       if (!result) {
-        toast.error("CEP não encontrado.");
+        toast.error("CEP nao encontrado. Voce pode preencher o endereco manualmente.");
         return;
       }
 
@@ -532,6 +559,70 @@ const Index = () => {
       toast.error(err instanceof Error ? err.message : "Falha ao consultar o CEP.");
     } finally {
       setLookingUpPastorCep(false);
+    }
+  };
+
+  const handleUserCepLookup = async (value: string) => {
+    const formatted = formatCep(value);
+    setUserForm((prev) => ({ ...prev, cep: formatted }));
+
+    if (onlyDigits(formatted).length !== 8) return;
+
+    setLookingUpUserCep(true);
+    try {
+      const result = await lookupCep(formatted);
+      if (!result) {
+        setShowManualUserAddress(true);
+        toast.error("CEP nao encontrado. Preencha o endereco manualmente.");
+        return;
+      }
+
+      setUserForm((prev) => ({
+        ...prev,
+        cep: result.cep,
+        address_street: result.street || prev.address_street,
+        address_neighborhood: result.neighborhood || prev.address_neighborhood,
+        address_city: result.city || prev.address_city,
+        address_state: result.state || prev.address_state,
+      }));
+      setShowManualUserAddress(false);
+    } catch (err) {
+      setShowManualUserAddress(true);
+      toast.error(err instanceof Error ? err.message : "Falha ao consultar o CEP.");
+    } finally {
+      setLookingUpUserCep(false);
+    }
+  };
+
+  const handleChurchCepLookup = async (value: string) => {
+    const formatted = formatCep(value);
+    setChurchForm((prev) => ({ ...prev, cep: formatted }));
+
+    if (onlyDigits(formatted).length !== 8) return;
+
+    setLookingUpChurchCep(true);
+    try {
+      const result = await lookupCep(formatted);
+      if (!result) {
+        setShowManualChurchAddress(true);
+        toast.error("CEP nao encontrado. Preencha o endereco manualmente.");
+        return;
+      }
+
+      setChurchForm((prev) => ({
+        ...prev,
+        cep: result.cep,
+        address_street: result.street || prev.address_street,
+        address_neighborhood: result.neighborhood || prev.address_neighborhood,
+        address_city: result.city || prev.address_city,
+        address_state: result.state || prev.address_state,
+      }));
+      setShowManualChurchAddress(false);
+    } catch (err) {
+      setShowManualChurchAddress(true);
+      toast.error(err instanceof Error ? err.message : "Falha ao consultar o CEP.");
+    } finally {
+      setLookingUpChurchCep(false);
     }
   };
 
@@ -554,7 +645,7 @@ const Index = () => {
         email: pastorProfile.email.trim() || null,
         birth_date: pastorProfile.data_nascimento.trim() || null,
         ordination_date: pastorProfile.data_ordenacao.trim() || null,
-        minister_role: pastorProfile.cargo_ministerial.trim() || null,
+        minister_role: normalizeMinisterialRoleLabel(pastorProfile.cargo_ministerial, "Pastor").trim() || null,
         cep: pastorProfile.cep.trim() || null,
         address_street: pastorProfile.endereco.trim() || null,
         address_number: pastorProfile.numero.trim() || null,
@@ -599,7 +690,13 @@ const Index = () => {
         totvs_access: [{ totvs_id: userForm.default_totvs_id, role: userRole === "admin" ? userForm.role : "obreiro" }],
         phone: userForm.phone,
         email: userForm.email || null,
-        minister_role: userForm.minister_role || null,
+        minister_role: normalizeMinisterialRoleLabel(userForm.minister_role) || null,
+        cep: userForm.cep || null,
+        address_street: userForm.address_street || null,
+        address_neighborhood: userForm.address_neighborhood || null,
+        address_city: userForm.address_city || null,
+        address_state: userForm.address_state || null,
+        address_number: userForm.address_number || null,
         password: userForm.password || null,
         birth_date: userForm.birth_date || null,
         baptism_date: normalizeMinisterRole(userForm.minister_role).includes("membro") ? userForm.sacramental_date || null : null,
@@ -638,6 +735,10 @@ const Index = () => {
         parent_totvs_id: churchForm.class === "estadual" ? null : churchForm.parent_totvs_id || null,
         contact_email: churchForm.contact_email || null,
         contact_phone: churchForm.contact_phone || null,
+        cep: churchForm.cep || null,
+        address_street: churchForm.address_street || null,
+        address_neighborhood: churchForm.address_neighborhood || null,
+        address_number: churchForm.address_number || null,
         address_city: churchForm.address_city || null,
         address_state: churchForm.address_state || null,
         is_active: churchForm.is_active,
@@ -1050,6 +1151,9 @@ const Index = () => {
         onOpenChange={setUserDialogOpen}
         userForm={userForm}
         setUserForm={setUserForm}
+        lookingUpCep={lookingUpUserCep}
+        showManualAddressFields={showManualUserAddress || Boolean(userForm.address_street || userForm.address_neighborhood || userForm.address_city || userForm.address_state)}
+        onCepChange={(value) => void handleUserCepLookup(value)}
         ministerialOptions={ministerialOptions}
         sacramentalDateLabel={sacramentalDateLabel}
         userRole={userRole}
@@ -1062,6 +1166,9 @@ const Index = () => {
         onOpenChange={setChurchDialogOpen}
         churchForm={churchForm}
         setChurchForm={setChurchForm}
+        lookingUpCep={lookingUpChurchCep}
+        showManualAddressFields={showManualChurchAddress || Boolean(churchForm.address_street || churchForm.address_neighborhood || churchForm.address_city || churchForm.address_state)}
+        onCepChange={(value) => void handleChurchCepLookup(value)}
         saving={savingChurch}
         onSave={handleSaveChurch}
       />

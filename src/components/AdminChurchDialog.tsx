@@ -13,6 +13,10 @@ type ChurchFormState = {
   parent_totvs_id: string;
   contact_email: string;
   contact_phone: string;
+  cep: string;
+  address_street: string;
+  address_neighborhood: string;
+  address_number: string;
   address_city: string;
   address_state: string;
   is_active: boolean;
@@ -23,6 +27,9 @@ type AdminChurchDialogProps = {
   onOpenChange: (open: boolean) => void;
   churchForm: ChurchFormState;
   setChurchForm: Dispatch<SetStateAction<ChurchFormState>>;
+  lookingUpCep: boolean;
+  showManualAddressFields: boolean;
+  onCepChange: (value: string) => void;
   saving: boolean;
   onSave: () => void;
 };
@@ -32,6 +39,9 @@ export function AdminChurchDialog({
   onOpenChange,
   churchForm,
   setChurchForm,
+  lookingUpCep,
+  showManualAddressFields,
+  onCepChange,
   saving,
   onSave,
 }: AdminChurchDialogProps) {
@@ -80,6 +90,27 @@ export function AdminChurchDialog({
             <Label>Telefone de contato</Label>
             <Input value={churchForm.contact_phone} onChange={(e) => setChurchForm((prev) => ({ ...prev, contact_phone: e.target.value }))} />
           </div>
+          <div className="space-y-2">
+            <Label>CEP</Label>
+            <Input value={churchForm.cep} onChange={(e) => onCepChange(e.target.value)} placeholder="00000-000" />
+            {lookingUpCep ? <p className="text-xs text-muted-foreground">Consultando CEP...</p> : null}
+          </div>
+          <div className="space-y-2">
+            <Label>Numero</Label>
+            <Input value={churchForm.address_number} onChange={(e) => setChurchForm((prev) => ({ ...prev, address_number: e.target.value }))} />
+          </div>
+          {showManualAddressFields ? (
+            <>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Endereco</Label>
+                <Input value={churchForm.address_street} onChange={(e) => setChurchForm((prev) => ({ ...prev, address_street: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Bairro</Label>
+                <Input value={churchForm.address_neighborhood} onChange={(e) => setChurchForm((prev) => ({ ...prev, address_neighborhood: e.target.value }))} />
+              </div>
+            </>
+          ) : null}
           <div className="space-y-2">
             <Label>Cidade</Label>
             <Input value={churchForm.address_city} onChange={(e) => setChurchForm((prev) => ({ ...prev, address_city: e.target.value }))} />

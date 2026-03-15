@@ -14,6 +14,12 @@ type UserFormState = {
   phone: string;
   email: string;
   minister_role: string;
+  cep: string;
+  address_street: string;
+  address_neighborhood: string;
+  address_city: string;
+  address_state: string;
+  address_number: string;
   password: string;
   birth_date: string;
   sacramental_date: string;
@@ -26,6 +32,9 @@ type AdminUserDialogProps = {
   onOpenChange: (open: boolean) => void;
   userForm: UserFormState;
   setUserForm: Dispatch<SetStateAction<UserFormState>>;
+  lookingUpCep: boolean;
+  showManualAddressFields: boolean;
+  onCepChange: (value: string) => void;
   ministerialOptions: readonly string[];
   sacramentalDateLabel: string;
   userRole: string;
@@ -38,6 +47,9 @@ export function AdminUserDialog({
   onOpenChange,
   userForm,
   setUserForm,
+  lookingUpCep,
+  showManualAddressFields,
+  onCepChange,
   ministerialOptions,
   sacramentalDateLabel,
   userRole,
@@ -70,6 +82,35 @@ export function AdminUserDialog({
             <Label>Email</Label>
             <Input value={userForm.email} onChange={(e) => setUserForm((prev) => ({ ...prev, email: e.target.value }))} />
           </div>
+          <div className="space-y-2">
+            <Label>CEP</Label>
+            <Input value={userForm.cep} onChange={(e) => onCepChange(e.target.value)} placeholder="00000-000" />
+            {lookingUpCep ? <p className="text-xs text-muted-foreground">Consultando CEP...</p> : null}
+          </div>
+          <div className="space-y-2">
+            <Label>Numero</Label>
+            <Input value={userForm.address_number} onChange={(e) => setUserForm((prev) => ({ ...prev, address_number: e.target.value }))} />
+          </div>
+          {showManualAddressFields ? (
+            <>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Endereco</Label>
+                <Input value={userForm.address_street} onChange={(e) => setUserForm((prev) => ({ ...prev, address_street: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Bairro</Label>
+                <Input value={userForm.address_neighborhood} onChange={(e) => setUserForm((prev) => ({ ...prev, address_neighborhood: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Cidade</Label>
+                <Input value={userForm.address_city} onChange={(e) => setUserForm((prev) => ({ ...prev, address_city: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>UF</Label>
+                <Input value={userForm.address_state} onChange={(e) => setUserForm((prev) => ({ ...prev, address_state: e.target.value.toUpperCase().slice(0, 2) }))} maxLength={2} />
+              </div>
+            </>
+          ) : null}
           <div className="space-y-2">
             <Label>Cargo ministerial</Label>
             <Select value={userForm.minister_role} onValueChange={(value) => setUserForm((prev) => ({ ...prev, minister_role: value }))}>
