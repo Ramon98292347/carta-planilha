@@ -227,6 +227,18 @@ const parseTotvsFromChurchText = (value: string) => {
   return match ? match[1] : "";
 };
 
+const normalizeManualChurchDestination = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const match = raw.match(/^(\d{1,10})\s*[-)\s]?\s*(.+)$/);
+  if (!match) return raw.toUpperCase();
+
+  const totvsId = match[1].trim();
+  const churchName = match[2].trim().replace(/\s+/g, " ").toUpperCase();
+  return churchName ? `${totvsId} - ${churchName}` : totvsId;
+};
+
 const getDerivedStatusForFilter = (row: Record<string, string>) => {
   const statusUsuario = String(row.status_usuario || row["Status Usuario"] || "").trim().toUpperCase();
   const statusCartaOperacional = String(row.obreiro_auth_status_carta || "").trim().toUpperCase();
@@ -845,7 +857,7 @@ const Index = () => {
       toast.error("Selecione a igreja de origem.");
       return;
     }
-    const finalDestination = (letterForm.church_destination || letterForm.church_destination_manual).trim();
+    const finalDestination = letterForm.church_destination.trim() || normalizeManualChurchDestination(letterForm.church_destination_manual);
     if (!finalDestination) {
       toast.error("Selecione a igreja de destino.");
       return;
@@ -1663,7 +1675,14 @@ const Index = () => {
                         church_destination: "",
                       }))
                     }
-                    placeholder="Digite a igreja manualmente"
+                    onBlur={(e) =>
+                      setLetterForm((prev) => ({
+                        ...prev,
+                        church_destination_manual: normalizeManualChurchDestination(e.target.value),
+                        church_destination: "",
+                      }))
+                    }
+                    placeholder="Ex.: 9901 - PIUMA-NITEROI"
                     disabled={!!letterForm.church_destination.trim()}
                   />
                 </div>

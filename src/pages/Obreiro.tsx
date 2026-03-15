@@ -127,6 +127,18 @@ const formatDateBr = (value: string) => {
   return `${match[3]}/${match[2]}/${match[1]}`;
 };
 
+const normalizeManualChurchDestination = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const match = raw.match(/^(\d{1,10})\s*[-)\s]?\s*(.+)$/);
+  if (!match) return raw.toUpperCase();
+
+  const totvsId = match[1].trim();
+  const churchName = match[2].trim().replace(/\s+/g, " ").toUpperCase();
+  return churchName ? `${totvsId} - ${churchName}` : totvsId;
+};
+
 const parseBrDateToDate = (value: string) => {
   const raw = String(value || "").trim();
   const match = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -655,14 +667,14 @@ export default function Obreiro() {
     preach_date: letterForm.dia_pregacao,
     preach_period: "NOITE",
     church_origin: originTotvs ? `${originTotvs} ${clientConfig.church_name || churchName}`.trim() : clientConfig.church_name || churchName,
-    church_destination: (letterForm.igreja_destino || letterForm.igreja_destino_manual).trim(),
+    church_destination: letterForm.igreja_destino.trim() || normalizeManualChurchDestination(letterForm.igreja_destino_manual),
     preacher_user_id: profile.id,
     phone: profile.telefone,
     email: profile.email || null,
   });
 
   const handleCreateLetter = async () => {
-    const igrejaDestinoFinal = (letterForm.igreja_destino || letterForm.igreja_destino_manual).trim();
+    const igrejaDestinoFinal = letterForm.igreja_destino.trim() || normalizeManualChurchDestination(letterForm.igreja_destino_manual);
     if (!(letterForm.ministerial || profile.cargo_ministerial) || !igrejaDestinoFinal || !letterForm.dia_pregacao) {
       toast.error("Preencha funcao ministerial, igreja destino e data da pregacao.");
       return;
@@ -1113,7 +1125,14 @@ export default function Obreiro() {
                   <Input
                     value={letterForm.igreja_destino_manual}
                     onChange={(e) => setLetterForm((prev) => ({ ...prev, igreja_destino_manual: e.target.value, igreja_destino: "" }))}
-                    placeholder="Digite a igreja manualmente"
+                    onBlur={(e) =>
+                      setLetterForm((prev) => ({
+                        ...prev,
+                        igreja_destino_manual: normalizeManualChurchDestination(e.target.value),
+                        igreja_destino: "",
+                      }))
+                    }
+                    placeholder="Ex.: 9901 - PIUMA-NITEROI"
                     disabled={!!letterForm.igreja_destino.trim()}
                   />
                 </div>
