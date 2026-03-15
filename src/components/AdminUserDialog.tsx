@@ -46,7 +46,7 @@ export function AdminUserDialog({
 }: AdminUserDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] max-w-2xl overflow-y-auto p-3 sm:p-6">
         <DialogHeader>
           <DialogTitle>Cadastrar usuário</DialogTitle>
           <DialogDescription>
@@ -141,9 +141,9 @@ export function AdminUserDialog({
             </Select>
           </div>
         </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-          <Button onClick={onSave} disabled={saving}>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving} className="w-full sm:w-auto">Cancelar</Button>
+          <Button onClick={onSave} disabled={saving} className="w-full sm:w-auto">
             {saving ? "Salvando..." : "Salvar usuário"}
           </Button>
         </div>

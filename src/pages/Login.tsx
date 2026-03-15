@@ -403,7 +403,7 @@ export default function Login() {
       </footer>
 
       <Dialog open={quickSignupOpen} onOpenChange={setQuickSignupOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-md p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Cadastro rápido</DialogTitle>
             <DialogDescription>

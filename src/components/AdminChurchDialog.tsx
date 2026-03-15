@@ -37,7 +37,7 @@ export function AdminChurchDialog({
 }: AdminChurchDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] max-w-2xl overflow-y-auto p-3 sm:p-6">
         <DialogHeader>
           <DialogTitle>Cadastrar igreja</DialogTitle>
           <DialogDescription>
@@ -101,9 +101,9 @@ export function AdminChurchDialog({
             </Select>
           </div>
         </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-          <Button onClick={onSave} disabled={saving}>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving} className="w-full sm:w-auto">Cancelar</Button>
+          <Button onClick={onSave} disabled={saving} className="w-full sm:w-auto">
             {saving ? "Salvando..." : "Salvar igreja"}
           </Button>
         </div>

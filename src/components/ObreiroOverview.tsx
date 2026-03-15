@@ -53,7 +53,7 @@ export function ObreiroOverview({
   return (
     <>
       <header className="border-b bg-card shadow-sm">
-        <div className="container mx-auto flex items-center justify-between gap-3 px-4 py-4">
+        <div className="container mx-auto flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
               <FileText className="h-5 w-5 text-primary-foreground" />
@@ -63,7 +63,7 @@ export function ObreiroOverview({
               <p className="text-xs text-muted-foreground">Dashboard, cartas e cadastro</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" variant="outline" className="relative h-9 w-9 p-0">
