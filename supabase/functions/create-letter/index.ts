@@ -36,6 +36,7 @@ type Body = {
   preach_period?: PreachPeriod;
   church_origin?: string;
   church_destination?: string;
+  manual_destination?: boolean;
   preacher_user_id?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -125,6 +126,26 @@ function findFirstAncestorByClass(startTotvs: string, churches: ChurchNode[], ta
     cur = row.parent_totvs_id || null;
   }
   return null;
+}
+
+function resolveHighestHierarchyChurch(startTotvs: string, churches: ChurchNode[]): ChurchNode | null {
+  const byId = mapById(churches);
+  let current = byId.get(startTotvs) || null;
+  if (!current) return null;
+
+  let top = current;
+  const seen = new Set<string>([current.totvs_id]);
+  let cur = current.parent_totvs_id || null;
+
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    const row = byId.get(cur);
+    if (!row) break;
+    top = row;
+    cur = row.parent_totvs_id || null;
+  }
+
+  return top;
 }
 
 function resolveAllowedOriginTotvs(session: SessionClaims, activeChurch: ChurchNode, churches: ChurchNode[]): Set<string> {
@@ -308,6 +329,7 @@ Deno.serve(async (req) => {
     const church_origin = String(body.church_origin || "").trim();
     const church_destination = String(body.church_destination || "").trim();
     const preach_period = String(body.preach_period || "NOITE").trim().toUpperCase() as PreachPeriod;
+    const destinationProvidedManually = Boolean(body.manual_destination);
 
     if (!["MANHA", "TARDE", "NOITE"].includes(preach_period)) return json({ ok: false, error: "invalid_preach_period" }, 400);
     if (!preach_date_str) return json({ ok: false, error: "missing_preach_date" }, 400);
@@ -342,7 +364,7 @@ Deno.serve(async (req) => {
     const activeChurch = byId.get(session.active_totvs_id) || null;
     if (!activeChurch) return json({ ok: false, error: "church_not_found" }, 404);
 
-    const originTotvs = parseTotvsFromText(church_origin) || session.active_totvs_id;
+    let originTotvs = parseTotvsFromText(church_origin) || session.active_totvs_id;
     if (!byId.has(originTotvs)) return json({ ok: false, error: "origin_church_not_found" }, 404);
 
     const allowedOrigins = resolveAllowedOriginTotvs(session, activeChurch, churches);
@@ -362,6 +384,14 @@ Deno.serve(async (req) => {
 
     if (!byId.has(destinationTotvs)) return json({ ok: false, error: "destination_church_not_found" }, 404);
 
+    if (destinationProvidedManually) {
+      const highestHierarchyChurch = resolveHighestHierarchyChurch(session.active_totvs_id, churches);
+      if (!highestHierarchyChurch) {
+        return json({ ok: false, error: "highest_origin_not_found" }, 409);
+      }
+      originTotvs = highestHierarchyChurch.totvs_id;
+    }
+
     const ownershipTotvs = session.active_totvs_id;
     const activeScope = computeScope(ownershipTotvs, churches);
     const activeAncestors = collectAncestors(ownershipTotvs, churches);
@@ -369,7 +399,7 @@ Deno.serve(async (req) => {
     const parentScope = directParent ? computeScope(directParent.totvs_id, churches) : new Set<string>();
     const allowedDestinations = new Set<string>([...activeScope, ...activeAncestors, ...parentScope]);
 
-    if (!allowedDestinations.has(destinationTotvs)) {
+    if (!destinationProvidedManually && !allowedDestinations.has(destinationTotvs)) {
       return json({
         ok: false,
         error: "destination_out_of_scope",
@@ -378,7 +408,7 @@ Deno.serve(async (req) => {
     }
 
     // Regra do pastor: se o destino estiver acima da igreja dele, a origem deve ser sempre a mae direta.
-    if (session.role === "pastor" && !activeScope.has(destinationTotvs)) {
+    if (!destinationProvidedManually && session.role === "pastor" && !activeScope.has(destinationTotvs)) {
       if (!directParent) {
         return json({
           ok: false,
@@ -428,6 +458,8 @@ Deno.serve(async (req) => {
         .maybeSingle();
       originPastorUser = (data as Record<string, unknown> | null) || null;
     }
+
+    const finalChurchOrigin = originChurch?.church_name ? `${originChurch.totvs_id} - ${originChurch.church_name}` : church_origin;
 
     let preacher_user_id: string | null = body.preacher_user_id ?? null;
     let preacher_name = String(body.preacher_name || "").trim();
@@ -493,7 +525,7 @@ Deno.serve(async (req) => {
         minister_role,
         preach_date: preach_date_str,
         preach_period,
-        church_origin,
+        church_origin: finalChurchOrigin,
         church_destination,
         phone: preacher_phone,
         email: preacher_email,

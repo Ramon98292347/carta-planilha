@@ -869,6 +869,7 @@ const Index = () => {
 
     setCreatingLetter(true);
     try {
+      const manualDestination = !!letterForm.church_destination_manual.trim();
       const payload = {
         preacher_user_id: letterTarget.id || null,
         preacher_name: letterTarget.nome,
@@ -877,6 +878,7 @@ const Index = () => {
         preach_period: letterForm.preach_period,
         church_origin: letterForm.church_origin,
         church_destination: finalDestination,
+        manual_destination: manualDestination,
         phone: letterTarget.telefone || null,
         email: letterTarget.email || null,
       };
@@ -1685,6 +1687,9 @@ const Index = () => {
                     placeholder="Ex.: 9901 - PIUMA-NITEROI"
                     disabled={!!letterForm.church_destination.trim()}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Modelo: <span className="font-medium">9901 - PIUMA-NITEROI</span>. Se digitar diferente, o sistema tenta padronizar automaticamente.
+                  </p>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">

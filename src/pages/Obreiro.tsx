@@ -668,6 +668,7 @@ export default function Obreiro() {
     preach_period: "NOITE",
     church_origin: originTotvs ? `${originTotvs} ${clientConfig.church_name || churchName}`.trim() : clientConfig.church_name || churchName,
     church_destination: letterForm.igreja_destino.trim() || normalizeManualChurchDestination(letterForm.igreja_destino_manual),
+    manual_destination: !!letterForm.igreja_destino_manual.trim(),
     preacher_user_id: profile.id,
     phone: profile.telefone,
     email: profile.email || null,
@@ -1135,6 +1136,9 @@ export default function Obreiro() {
                     placeholder="Ex.: 9901 - PIUMA-NITEROI"
                     disabled={!!letterForm.igreja_destino.trim()}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Modelo: <span className="font-medium">9901 - PIUMA-NITEROI</span>. Se digitar diferente, o sistema tenta padronizar automaticamente.
+                  </p>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
