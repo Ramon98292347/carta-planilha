@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useState } from "react";
+import { formatDateBr, parseTotvsFromChurchText } from "@/lib/churchFormatting";
 import { supabase } from "@/lib/supabase";
 
 const LIST_MEMBERS_FUNCTION_NAME = (import.meta.env.VITE_LIST_MEMBERS_FUNCTION_NAME || "list-members").trim();
@@ -79,22 +80,6 @@ type NotificationsResponse = {
   notifications?: NotificationRow[];
 };
 
-const formatDateBr = (value: string | null | undefined) => {
-  const raw = String(value || "").trim();
-  if (!raw) return "-";
-
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      const [year, month, day] = raw.split("-");
-      return `${day}/${month}/${year}`;
-    }
-    return raw;
-  }
-
-  return date.toLocaleDateString("pt-BR");
-};
-
 const mapLetterStatus = (status: string) => {
   const normalized = String(status || "").trim().toUpperCase();
   if (normalized === "ENVIADA") return "Carta enviada";
@@ -103,10 +88,6 @@ const mapLetterStatus = (status: string) => {
   return "Aguardando liberacao";
 };
 
-const parseTotvsFromText = (value: string) => {
-  const match = String(value || "").trim().match(/^(\d{3,})\b/);
-  return match ? match[1] : "";
-};
 
 export function useSheetData() {
   const [url, setUrl] = useState("");
@@ -183,7 +164,7 @@ export function useSheetData() {
         // campo inteiro, nao apenas as emitidas pela igreja ativa.
         letters = letters.filter((row) => {
           const churchTotvs = String(row.church_totvs_id || "").trim();
-          const originTotvs = parseTotvsFromText(String(row.church_origin || ""));
+          const originTotvs = parseTotvsFromChurchText(String(row.church_origin || ""));
           return pastorScope.has(churchTotvs) || pastorScope.has(originTotvs);
         });
       }
@@ -367,3 +348,5 @@ export function useSheetData() {
     lastSyncAt,
   };
 }
+
+

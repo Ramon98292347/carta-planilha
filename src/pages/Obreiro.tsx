@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { clearAppSession, getAppToken } from "@/lib/appSession";
+import { formatDateBr, normalizeManualChurchDestination } from "@/lib/churchFormatting";
 import { formatCep, lookupCep, onlyDigits } from "@/lib/cep";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -116,27 +117,6 @@ const isBlockedStatusValue = (value: string) => String(value || "").trim().toUpp
 const formatDisplayDate = (value: string) => {
   const raw = String(value || "").trim();
   return raw || "-";
-};
-
-const formatDateBr = (value: string) => {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) return raw;
-  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return raw;
-  return `${match[3]}/${match[2]}/${match[1]}`;
-};
-
-const normalizeManualChurchDestination = (value: string) => {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-
-  const match = raw.match(/^(\d{1,10})\s*[-)\s]?\s*(.+)$/);
-  if (!match) return raw.toUpperCase();
-
-  const totvsId = match[1].trim();
-  const churchName = match[2].trim().replace(/\s+/g, " ").toUpperCase();
-  return churchName ? `${totvsId} - ${churchName}` : totvsId;
 };
 
 const parseBrDateToDate = (value: string) => {
