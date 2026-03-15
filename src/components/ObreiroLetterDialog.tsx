@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type LetterFormState = {
   ministerial: string;
@@ -102,6 +103,30 @@ export function ObreiroLetterDialog({
               </div>
               <div className="space-y-2">
                 <Label>Igreja que vai pregar (destino)</Label>
+                <Select
+                  value=""
+                  onValueChange={(value) =>
+                    setLetterForm((prev) => ({
+                      ...prev,
+                      igreja_destino: value,
+                      igreja_destino_manual: "",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma igreja sugerida" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {destinationOptions.map((item) => {
+                      const value = `${item.totvs_church_id} - ${item.church_name}`;
+                      return (
+                        <SelectItem key={item.totvs_church_id} value={value}>
+                          {value}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <Input
@@ -141,6 +166,9 @@ export function ObreiroLetterDialog({
                 {searchingDestinations && (
                   <p className="text-xs text-muted-foreground">Buscando igrejas...</p>
                 )}
+                <p className="text-xs text-muted-foreground">
+                  Se escolher uma igreja sugerida, a origem segue a sua igreja atual. Se digitar um destino fora das opções conhecidas, o sistema trata como manual e aplica a regra da igreja mãe.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>Outros (se nao encontrar)</Label>

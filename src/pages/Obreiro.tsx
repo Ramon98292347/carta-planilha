@@ -642,6 +642,12 @@ export default function Obreiro() {
   };
 
   const buildLetterPayload = () => ({
+    // Comentario: se o destino digitado nao bater com uma igreja conhecida,
+    // ele passa a ser tratado como manual para a regra da hierarquia mae.
+    church_destination: selectedDestination
+      ? `${selectedDestination.totvs_church_id} - ${selectedDestination.church_name}`
+      : normalizeManualChurchDestination(letterForm.igreja_destino.trim() || letterForm.igreja_destino_manual),
+    manual_destination: !selectedDestination || !!letterForm.igreja_destino_manual.trim(),
     // Comentario: o backend novo completa os dados faltantes pela sessao,
     // pela hierarquia da igreja e pelo pastor assinante resolvido.
     preacher_name: profile.nome,
@@ -649,15 +655,15 @@ export default function Obreiro() {
     preach_date: letterForm.dia_pregacao,
     preach_period: "NOITE",
     church_origin: originTotvs ? `${originTotvs} ${clientConfig.church_name || churchName}`.trim() : clientConfig.church_name || churchName,
-    church_destination: letterForm.igreja_destino.trim() || normalizeManualChurchDestination(letterForm.igreja_destino_manual),
-    manual_destination: !!letterForm.igreja_destino_manual.trim(),
     preacher_user_id: profile.id,
     phone: profile.telefone,
     email: profile.email || null,
   });
 
   const handleCreateLetter = async () => {
-    const igrejaDestinoFinal = letterForm.igreja_destino.trim() || normalizeManualChurchDestination(letterForm.igreja_destino_manual);
+    const igrejaDestinoFinal = selectedDestination
+      ? `${selectedDestination.totvs_church_id} - ${selectedDestination.church_name}`
+      : normalizeManualChurchDestination(letterForm.igreja_destino.trim() || letterForm.igreja_destino_manual);
     if (!(letterForm.ministerial || profile.cargo_ministerial) || !igrejaDestinoFinal || !letterForm.dia_pregacao) {
       toast.error("Preencha funcao ministerial, igreja destino e data da pregacao.");
       return;
