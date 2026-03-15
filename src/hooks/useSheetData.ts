@@ -18,6 +18,8 @@ type LetterRow = {
   id: string;
   church_totvs_id: string;
   preacher_user_id?: string | null;
+  signer_user_id?: string | null;
+  signer_totvs_id?: string | null;
   preacher_name: string;
   minister_role: string;
   preach_date: string;
@@ -146,7 +148,7 @@ export function useSheetData() {
           body: { page: 1, page_size: 500 },
         }),
         supabase.functions.invoke<MembersResponse>(LIST_MEMBERS_FUNCTION_NAME, {
-          body: { page: 1, page_size: 500, roles: ["obreiro"] },
+          body: { page: 1, page_size: 500, roles: ["obreiro", "pastor"] },
         }),
         supabase.functions.invoke<LettersResponse>(LIST_LETTERS_FUNCTION_NAME, {
           body: { page: 1, page_size: 500 },
@@ -214,6 +216,18 @@ export function useSheetData() {
           raw_status: rawStatus,
           church_totvs_id: String(row.church_totvs_id || "").trim(),
           preacher_user_id: String(row.preacher_user_id || "").trim(),
+          signer_user_id: String(row.signer_user_id || "").trim(),
+          signer_totvs_id: String(row.signer_totvs_id || "").trim(),
+          linked_user_id: String(linkedMember?.id || "").trim(),
+          linked_user_nome: String(linkedMember?.full_name || "").trim(),
+          linked_user_telefone: String(linkedMember?.phone || "").trim(),
+          linked_user_email: String(linkedMember?.email || "").trim(),
+          linked_user_cargo: String(linkedMember?.minister_role || "").trim(),
+          linked_user_role: String(linkedMember?.role || "").trim(),
+          linked_user_default_totvs_id: String(linkedMember?.default_totvs_id || "").trim(),
+          linked_user_status: linkedMember ? (linkedMember.is_active ? "AUTORIZADO" : "BLOQUEADO") : "",
+          linked_user_status_carta: linkedMember ? (linkedMember.can_create_released_letter ? "LIBERADA" : "GERADA") : "",
+          linked_user_auto_release: linkedMember?.can_create_released_letter ? "1" : "0",
           nome: String(row.preacher_name || "-").trim() || "-",
           telefone: phone || "-",
           email: String(row.email || "-").trim() || "-",
@@ -240,7 +254,9 @@ export function useSheetData() {
         };
       });
 
-      const nextObreiros = members.map((row) => {
+      const nextObreiros = members
+        .filter((row) => String(row.role || "").trim().toLowerCase() === "obreiro")
+        .map((row) => {
         const church = churchByTotvs.get(String(row.default_totvs_id || "").trim());
         const autoReleaseEnabled = Boolean(row.can_create_released_letter);
         return {

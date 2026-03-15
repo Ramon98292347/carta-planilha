@@ -569,6 +569,12 @@ const Index = () => {
 
   const isPastorManagedLetter = (row: Record<string, string>) => {
     if (userRole !== "pastor") return true;
+    const signerUserId = String(row.signer_user_id || "").trim();
+    if (signerUserId) return signerUserId === userId;
+
+    const signerTotvsId = String(row.signer_totvs_id || "").trim();
+    if (signerTotvsId) return isPastorManagedOriginTotvs(signerTotvsId);
+
     const originTotvs = parseTotvsFromChurchText(String(row.igreja_origem || ""));
     return isPastorManagedOriginTotvs(originTotvs);
   };
@@ -913,6 +919,23 @@ const Index = () => {
   };
 
   const resolveObreiroFromCarta = (row: Record<string, string>) => {
+    const linkedUserId = String(row.linked_user_id || "").trim();
+    if (linkedUserId) {
+      return {
+        id: linkedUserId,
+        nome: String(row.linked_user_nome || row.nome || "").trim(),
+        telefone: String(row.linked_user_telefone || row.telefone || "").trim(),
+        email: String(row.linked_user_email || row.email || "").trim(),
+        cargo: String(row.linked_user_cargo || row.cargo || "").trim(),
+        church_totvs_id: String(row.linked_user_default_totvs_id || row.church_totvs_id || "").trim(),
+        default_totvs_id: String(row.linked_user_default_totvs_id || row.church_totvs_id || "").trim(),
+        status_usuario: String(row.linked_user_status || "").trim(),
+        status_carta: String(row.linked_user_status_carta || "").trim(),
+        can_create_released_letter: String(row.linked_user_auto_release || "0").trim(),
+        role: String(row.linked_user_role || "").trim(),
+      } as unknown as Record<string, string>;
+    }
+
     const userIdKey = String(row.preacher_user_id || "").trim();
     if (userIdKey) {
       if (loggedPastorTarget && userIdKey === loggedPastorTarget.id) return loggedPastorTarget as unknown as Record<string, string>;
