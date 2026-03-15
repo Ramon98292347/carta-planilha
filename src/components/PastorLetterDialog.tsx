@@ -39,6 +39,7 @@ type PastorLetterDialogProps = {
   letterForm: PastorLetterFormState;
   setLetterForm: React.Dispatch<React.SetStateAction<PastorLetterFormState>>;
   allowedOrigins: ScopedChurch[];
+  destinationOptions: Array<{ value: string; church: DestinationChurchRow }>;
   filteredPastorDestinationOptions: Array<{ value: string; church: DestinationChurchRow }>;
   loadingPastorDestinations: boolean;
   shouldAdjustOriginToParent: boolean;
@@ -62,6 +63,7 @@ export function PastorLetterDialog({
   letterForm,
   setLetterForm,
   allowedOrigins,
+  destinationOptions,
   filteredPastorDestinationOptions,
   loadingPastorDestinations,
   shouldAdjustOriginToParent,
@@ -124,6 +126,27 @@ export function PastorLetterDialog({
               </div>
               <div className="space-y-2">
                 <Label>Igreja que vai pregar (destino)</Label>
+                <Select
+                  value=""
+                  onValueChange={(value) =>
+                    setLetterForm((prev) => ({
+                      ...prev,
+                      church_destination: value,
+                      church_destination_manual: "",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma igreja do seu escopo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {destinationOptions.map(({ value, church }) => (
+                      <SelectItem key={value} value={value}>
+                        {value} {church.class ? `(${church.class})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <Input
@@ -143,6 +166,9 @@ export function PastorLetterDialog({
                 {letterForm.church_destination.trim().length > 0 && letterForm.church_destination.trim().length < 2 && !letterForm.church_destination_manual.trim() && (
                   <p className="text-xs text-muted-foreground">Digite pelo menos 2 caracteres para buscar.</p>
                 )}
+                <p className="text-xs text-muted-foreground">
+                  Se escolher uma igreja do escopo no seletor, a origem volta para a igreja do seu papel logado. Se digitar um destino fora do escopo, a origem sobe para a igreja mãe.
+                </p>
                 {filteredPastorDestinationOptions.length > 0 && (
                   <div className="max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-sm">
                     {filteredPastorDestinationOptions.map(({ value, church }) => (

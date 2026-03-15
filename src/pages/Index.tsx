@@ -543,11 +543,14 @@ const Index = () => {
   );
 
   useEffect(() => {
-    if (!letterDialogOpen || !shouldAdjustOriginToParent || !resolvedParentChurch) return;
+    if (!letterDialogOpen || !activeChurch) return;
 
-    const requiredOrigin = buildChurchLabel(resolvedParentChurch);
+    const requiredOrigin = shouldAdjustOriginToParent && resolvedParentChurch
+      ? buildChurchLabel(resolvedParentChurch)
+      : buildChurchLabel(activeChurch);
+
     setLetterForm((prev) => (prev.church_origin === requiredOrigin ? prev : { ...prev, church_origin: requiredOrigin }));
-  }, [letterDialogOpen, shouldAdjustOriginToParent, resolvedParentChurch]);
+  }, [letterDialogOpen, shouldAdjustOriginToParent, resolvedParentChurch, activeChurch]);
   const selectedOriginChurch = useMemo(
     () => allowedOrigins.find((church) => buildChurchLabel(church) === letterForm.church_origin) || null,
     [allowedOrigins, letterForm.church_origin],
@@ -1371,6 +1374,7 @@ const Index = () => {
         letterForm={letterForm}
         setLetterForm={setLetterForm}
         allowedOrigins={allowedOrigins}
+        destinationOptions={destinationOptions}
         filteredPastorDestinationOptions={filteredPastorDestinationOptions}
         loadingPastorDestinations={loadingPastorDestinations}
         shouldAdjustOriginToParent={shouldAdjustOriginToParent}
