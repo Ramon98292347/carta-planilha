@@ -7,61 +7,16 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { formatDate, parseDate } from "@/lib/sheets";
 import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
+import { EMPTY, buildFormUrl, getDerivedStatusClass, getDerivedStatusLabel, getDocId, getPhoneDigits, getStatusCartaOperacional, getStatusCartaVisual, getStatusUsuario, isAutoReleaseEnabled, isBlockedRow, isImageUrl } from "@/lib/dataTableHelpers";
+import { buildSendLetterPayload, getEnvioStatus, getObreiroAuthIdentity as resolveObreiroAuthIdentity, parseClientConfig, type ClientLettersConfig, withTechnicalContext } from "@/lib/dataTableLetters";
 import { toast } from "sonner";
 
 const PAGE_SIZE = 25;
-const EMPTY = "\u2014";
 const BLOCK_FORM_NAME_FIELD = "entry.1208647889";
 const BLOCK_FORM_STATUS_FIELD = "entry.1791445451";
 const LETTERS_WEBHOOK_URL = "https://n8n-n8n.ynlng8.easypanel.host/webhook/cartas-novo";
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
-
-type ClientLettersConfig = {
-  gasDeleteUrl: string;
-  googleSheetUrl: string;
-  googleFormUrl: string;
-  googleSheetId: string;
-  googleFormId: string;
-  driveSentFolderId: string;
-};
-
-const getStatusUsuario = (row: Record<string, string>) =>
-  String(row.obreiro_auth_status || row["Status Usuario"] || row["\"Status Usuario\""] || row.statusUsuario || row.status_usuario || "")
-    .trim()
-    .toUpperCase();
-
-const isBlockedRow = (row: Record<string, string>) => getStatusUsuario(row) === "BLOQUEADO";
-
-const getStatusCartaOperacional = (row: Record<string, string>) => String(row.obreiro_auth_status_carta || "").trim().toUpperCase();
-
-const getStatusCartaVisual = (row: Record<string, string>) =>
-  String(row["Status Carta"] || row.statusCarta || row.status_carta || "").trim().toUpperCase();
-
-const isAutoReleaseEnabled = (row: Record<string, string>) => getStatusCartaOperacional(row) === "LIBERADA";
-
-const getDerivedStatusLabel = (row: Record<string, string>) => {
-  const statusUsuario = getStatusUsuario(row);
-  const statusCartaVisual = getStatusCartaVisual(row);
-  const statusCartaOperacional = getStatusCartaOperacional(row);
-  const envio = String(row["Envio"] || row.envio || "").trim().toUpperCase();
-  const driveStatus = String(row["Drive Status"] || row.driveStatus || row.drive_status || "").trim().toUpperCase();
-
-  if (statusUsuario === "BLOQUEADO") return "Bloqueado";
-  if (driveStatus === "CARTA_ENVIADA") return "Carta enviada";
-  if (envio === "ENVIADO") return "Carta enviada";
-  if (statusCartaOperacional === "LIBERADA") return "Liberado automatico";
-  if (statusCartaVisual === "LIBERADA") return "Carta liberada";
-  return "Aguardando liberacao";
-};
-
-const getDerivedStatusClass = (label: string) => {
-  if (label === "Bloqueado") return "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-50";
-  if (label === "Gerada") return "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50";
-  if (label === "Aguardando liberacao") return "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-50";
-  if (label === "Liberado automatico") return "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50";
-  return "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50";
-};
 
 interface Column {
   key: string;
@@ -232,46 +187,6 @@ export function DataTable({
 
   const shouldHighlightBlocked = (row: Record<string, string>) => highlightStatus && isBlocked(row);
 
-  const isImageUrl = (value: string, key?: string) => {
-    const v = (value || "").trim();
-    if (!v || !/^https?:\/\//i.test(v)) return false;
-    if (/\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i.test(v)) return true;
-    if (key && /(foto|imagem|image|photo)/i.test(key)) return true;
-    return false;
-  };
-
-  const buildFormUrl = (baseUrl: string, params: Record<string, string>) => {
-    const trimmed = (baseUrl || "").trim();
-    if (!trimmed) return "";
-    try {
-      const url = new URL(trimmed);
-      Object.entries(params).forEach(([k, v]) => {
-        url.searchParams.set(k, v ?? "");
-      });
-      return url.toString();
-    } catch {
-      const qs = new URLSearchParams(params).toString();
-      if (!qs) return trimmed;
-      return trimmed.includes("?") ? `${trimmed}&${qs}` : `${trimmed}?${qs}`;
-    }
-  };
-
-  const getDocId = (row: Record<string, string>) =>
-    (
-      row.doc_id ||
-      row["Merged Doc ID - carta de pregação"] ||
-      row["Merged Doc ID - carta de pregacao"] ||
-      row["Merged Doc ID - Cartas"] ||
-      row["Merged Doc ID - cartas"] ||
-      row["merged_doc_id_-_cartas"] ||
-      row["Merged Doc ID - Carta de Pregacao"] ||
-      row["merged_doc_id_-_carta_de_pregacao"] ||
-      ""
-    ).trim();
-
-  const getPhoneDigits = (row: Record<string, string>) =>
-    String(row.telefone || row.phone || row["Telefone"] || "").replace(/\D/g, "").trim();
-
   const resolveRow = (row: Record<string, string>) => {
     const docId = getDocId(row);
     const phone = getPhoneDigits(row);
@@ -288,74 +203,7 @@ export function DataTable({
 
   const getStatusCarta = (row: Record<string, string>) => getStatusCartaVisual(row);
 
-  const getEnvioStatus = (row: Record<string, string>) =>
-    String(row.envio || row["Envio"] || row.send_status || "").trim().toUpperCase();
-
-  const getDocUrl = (row: Record<string, string>) =>
-    (
-      row.doc_url ||
-      row.docUrl ||
-      row["Doc URL"] ||
-      row["doc_url"] ||
-      row["Merged Doc URL - carta de pregação"] ||
-      row["Merged Doc URL - carta de pregacao"] ||
-      row["Merged Doc URL - Carta de Pregacao"] ||
-      row["Merged Doc URL - Cartas"] ||
-      row["Merged Doc URL - cartas"] ||
-      ""
-    ).trim();
-
-  const getPdfUrl = (row: Record<string, string>) =>
-    (
-      row.pdf_url ||
-      row.pdfUrl ||
-      row.url_pdf ||
-      row["PDF URL"] ||
-      row["Link to merged Doc - carta de pregação"] ||
-      row["Link to merged Doc - carta de pregacao"] ||
-      row["Merged Doc URL - Carta de Pregacao"] ||
-      row["Merged Doc URL - Cartas"] ||
-      row["Merged Doc URL - cartas"] ||
-      row["Link to merged Doc - Carta de Pregacao"] ||
-      row["Link to merged Doc - Cartas"] ||
-      row["Link to merged Doc - cartas"] ||
-      ""
-    ).trim();
-
-  const buildSendLetterPayload = (
-    row: Record<string, string>,
-    tipoFluxo: "manual" | "automatico",
-    liberadoPor: string
-  ) => ({
-    tipo_fluxo: tipoFluxo,
-    action: "send_letter",
-    docId: getDocId(row),
-    docUrl: (getDocUrl(row) || "").trim(),
-    pdfUrl: (getPdfUrl(row) || "").trim(),
-    full_name: (row.nome || row.full_name || "-").trim() || "-",
-    phone: (row.telefone || row.phone || "-").trim() || "-",
-    email: (row.email || "-").trim() || "-",
-    church_name: (row.igreja_origem || row.church_name || "-").trim() || "-",
-    church_destination: (row.igreja_destino || row.church_destination || "-").trim() || "-",
-    preach_date: (row.data_pregacao || row.preach_date || "-").trim() || "-",
-    minister_role: (row.funcao || row["Funcao Ministerial ?"] || row.cargo || row.minister_role || "-").trim() || "-",
-    statusCarta: "LIBERADA",
-    liberadoPor,
-  });
-
   const isLiberacaoAutomatica = (row: Record<string, string>) => isAutoReleaseEnabled(row);
-
-  const parseClientConfig = (payload: Record<string, any> | null | undefined): ClientLettersConfig | null => {
-    if (!payload) return null;
-    const gasDeleteUrl = (payload.gas_delete_url || "").trim();
-    const googleSheetUrl = (payload.google_sheet_url || "").trim();
-    const googleFormUrl = (payload.google_form_url || "").trim();
-    const googleSheetId = (payload.google_sheet_id || "").trim();
-    const googleFormId = (payload.google_form_id || "").trim();
-    const driveSentFolderId = (payload.drive_sent_folder_id || "").trim();
-    if (!gasDeleteUrl) return null;
-    return { gasDeleteUrl, googleSheetUrl, googleFormUrl, googleSheetId, googleFormId, driveSentFolderId };
-  };
 
   const fetchClientConfig = async (): Promise<ClientLettersConfig | null> => {
     const clientId = (localStorage.getItem("clientId") || "").trim();
@@ -465,14 +313,6 @@ export function DataTable({
     };
   }, [useLegacyLetterActions]);
 
-  const withTechnicalContext = (cfg: ClientLettersConfig, body: Record<string, string>) => ({
-    gas_delete_url: cfg.gasDeleteUrl,
-    ...body,
-    ...(cfg.googleSheetId ? { googleSheetId: cfg.googleSheetId } : {}),
-    ...(cfg.googleFormId ? { googleFormId: cfg.googleFormId } : {}),
-    ...(cfg.driveSentFolderId ? { driveSentFolderId: cfg.driveSentFolderId } : {}),
-  });
-
   const callLettersWebhook = async (body: Record<string, string>) => {
     const cfg = clientConfig || (await fetchClientConfig());
     if (!cfg) {
@@ -501,20 +341,7 @@ export function DataTable({
 
   const getObreiroAuthIdentity = (row: Record<string, string>) => {
     const clientId = (localStorage.getItem("clientId") || "").trim();
-    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      throw new Error("Cliente nao autenticado para atualizar obreiro.");
-    }
-
-    const rawPhone = String(row.telefone || row.phone || row["Telefone"] || "");
-    const telefone = rawPhone.replace(/\D/g, "").trim();
-    if (!telefone) {
-      throw new Error("Telefone do obreiro nao informado.");
-    }
-
-    const nome = String(row.nome || row.full_name || row["Nome completo"] || "-").trim() || "-";
-    const email = String(row.email || row["Endere?o de e-mail"] || "").trim();
-
-    return { clientId, telefone, nome, email };
+    return resolveObreiroAuthIdentity(row, clientId, SUPABASE_URL, SUPABASE_ANON_KEY);
   };
 
   const saveObreiroAuthRow = async (row: Record<string, string>, patch: Record<string, string | null>) => {
