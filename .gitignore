@@ -11,6 +11,12 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.env.*
+!.env.example
+supabase/.temp/
+vite-dev.out.log
+vite-dev.err.log
 
 # Editor directories and files
 .vscode/*
