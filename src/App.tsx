@@ -1,14 +1,18 @@
-﻿import { Toaster } from "@/components/ui/toaster";
+import { Suspense, lazy } from "react";
+
 import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import Index from "./pages/Index";
-import Login from "./pages/Login";
-import NotFound from "./pages/NotFound";
-import Obreiro from "./pages/Obreiro";
-import Divulgacao from "./pages/Divulgacao";
+
 import { hasAppSession } from "./lib/appSession";
+
+const Index = lazy(() => import("./pages/Index"));
+const Login = lazy(() => import("./pages/Login"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Obreiro = lazy(() => import("./pages/Obreiro"));
+const Divulgacao = lazy(() => import("./pages/Divulgacao"));
 
 const queryClient = new QueryClient();
 
@@ -28,34 +32,42 @@ const App = () => (
           v7_relativeSplatPath: true,
         }}
       >
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/obreiro"
-            element={
-              <RequireSession>
-                <Obreiro />
-              </RequireSession>
-            }
-          />
-          <Route
-            path="/"
-            element={
-              <RequireSession>
-                <Index />
-              </RequireSession>
-            }
-          />
-          <Route
-            path="/divulgacao"
-            element={
-              <RequireSession>
-                <Divulgacao />
-              </RequireSession>
-            }
-          />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <Suspense
+          fallback={
+            <div className="flex min-h-screen items-center justify-center bg-background px-4 text-sm text-muted-foreground">
+              Carregando...
+            </div>
+          }
+        >
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/obreiro"
+              element={
+                <RequireSession>
+                  <Obreiro />
+                </RequireSession>
+              }
+            />
+            <Route
+              path="/"
+              element={
+                <RequireSession>
+                  <Index />
+                </RequireSession>
+              }
+            />
+            <Route
+              path="/divulgacao"
+              element={
+                <RequireSession>
+                  <Divulgacao />
+                </RequireSession>
+              }
+            />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
