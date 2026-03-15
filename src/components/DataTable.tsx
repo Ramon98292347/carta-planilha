@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import { formatDate, parseDate } from "@/lib/sheets";
-import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 import { EMPTY, buildFormUrl, getDerivedStatusClass, getDerivedStatusLabel, getDocId, getPhoneDigits, getStatusCartaOperacional, getStatusCartaVisual, getStatusUsuario, isAutoReleaseEnabled, isBlockedRow } from "@/lib/dataTableHelpers";
-import { buildSendLetterPayload, getEnvioStatus, getObreiroAuthIdentity as resolveObreiroAuthIdentity, parseClientConfig, type ClientLettersConfig, withTechnicalContext } from "@/lib/dataTableLetters";
+import { buildSendLetterPayload, getEnvioStatus, getObreiroAuthIdentity as resolveObreiroAuthIdentity, type ClientLettersConfig } from "@/lib/dataTableLetters";
 import { DataTableActionMenu } from "@/components/DataTableActionMenu";
 import { DataTableDetailDialog } from "@/components/DataTableDetailDialog";
 import type { Column, DetailField, RowActionItem } from "@/lib/dataTableTypes";
+import { callLettersWebhookApi, fetchClientLettersConfig, fetchObreirosAuthRows, saveObreiroAuthRowApi } from "@/lib/dataTableApi";
 import { toast } from "sonner";
 
 const PAGE_SIZE = 25;
@@ -196,36 +196,7 @@ export function DataTable({
 
   const fetchClientConfig = async (): Promise<ClientLettersConfig | null> => {
     const clientId = (localStorage.getItem("clientId") || "").trim();
-    if (!clientId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-
-    const headers = getSupabaseHeaders({ json: false });
-
-    try {
-      const cacheParams = new URLSearchParams({ select: "*", limit: "1" });
-      cacheParams.set("client_id", `eq.${clientId}`);
-      const cacheRes = await fetch(`${SUPABASE_URL}/rest/v1/client_cache?${cacheParams.toString()}`, { headers });
-      const cachePayload = (await cacheRes.json().catch(() => [])) as Record<string, any>[];
-      const fromCache = parseClientConfig(cachePayload?.[0]);
-      if (fromCache) return fromCache;
-    } catch {
-      // fallback below
-    }
-
-    try {
-      const params = new URLSearchParams({
-        select: "gas_delete_url,google_sheet_url,google_form_url,google_sheet_id,google_form_id,drive_sent_folder_id",
-        limit: "1",
-      });
-      params.set("id", `eq.${clientId}`);
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/clients?${params.toString()}`, { headers });
-      const payload = (await response.json().catch(() => [])) as Record<string, any>[];
-      const fromClient = parseClientConfig(payload?.[0]);
-      if (fromClient) return fromClient;
-    } catch {
-      // ignore
-    }
-
-    return null;
+    return fetchClientLettersConfig(clientId, SUPABASE_URL, SUPABASE_ANON_KEY);
   };
 
   useEffect(() => {
@@ -246,14 +217,7 @@ export function DataTable({
 
       if (phones.length === 0) return;
 
-      const headers = getSupabaseHeaders({ json: false });
-      const params = new URLSearchParams({ select: "telefone,status,status_carta", limit: "5000" });
-      params.set("client_id", `eq.${clientId}`);
-
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${params.toString()}`, { headers });
-      if (!response.ok) return;
-
-      const rows = (await response.json().catch(() => [])) as Array<{ telefone?: string; status?: string; status_carta?: string | null }>;
+      const rows = await fetchObreirosAuthRows(clientId, SUPABASE_URL, SUPABASE_ANON_KEY);
       if (!active || !Array.isArray(rows)) return;
 
       const statusByPhone = new Map<string, string>();
@@ -309,23 +273,7 @@ export function DataTable({
       return null;
     }
     if (!clientConfig) setClientConfig(cfg);
-
-    const response = await fetch(LETTERS_WEBHOOK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(withTechnicalContext(cfg, body)),
-    });
-    let payload: Record<string, any> | null = null;
-    try {
-      payload = (await response.json()) as Record<string, any>;
-    } catch {
-      throw new Error("Resposta invalida do webhook");
-    }
-    if (!response.ok || !payload?.ok) {
-      const message = (payload?.error || payload?.message || `Falha na API da igreja (${response.status})`).trim();
-      throw new Error(message);
-    }
-    return payload;
+    return callLettersWebhookApi(LETTERS_WEBHOOK_URL, cfg, body);
   };
 
   const getObreiroAuthIdentity = (row: Record<string, string>) => {
@@ -334,68 +282,8 @@ export function DataTable({
   };
 
   const saveObreiroAuthRow = async (row: Record<string, string>, patch: Record<string, string | null>) => {
-    const { clientId, telefone, nome, email } = getObreiroAuthIdentity(row);
-    const headers = {
-      ...getSupabaseHeaders(),
-      Prefer: "return=representation",
-    };
-
-    const params = new URLSearchParams({
-      select: "id,telefone,status,status_carta",
-      limit: "1",
-    });
-    params.set("client_id", "eq." + clientId);
-    params.set("telefone", "eq." + telefone);
-
-    const existingRes = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${params.toString()}`, {
-      headers: getSupabaseHeaders({ json: false }),
-    });
-
-    if (!existingRes.ok) {
-      const body = await existingRes.text().catch(() => "");
-      throw new Error(body || "Falha ao consultar obreiro_auth.");
-    }
-
-    const existing = await existingRes.json().catch(() => []);
-    const basePayload = {
-      client_id: clientId,
-      nome,
-      telefone,
-      email: email || null,
-      ...patch,
-    };
-
-    if (Array.isArray(existing) && existing[0]?.id) {
-      const updateParams = new URLSearchParams({ select: "id,telefone,status,status_carta" });
-      updateParams.set("id", "eq." + existing[0].id);
-      const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth?${updateParams.toString()}`, {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify(patch),
-      });
-
-      if (!updateRes.ok) {
-        const body = await updateRes.text().catch(() => "");
-        throw new Error(body || "Falha ao atualizar obreiro_auth.");
-      }
-
-      const updated = await updateRes.json().catch(() => []);
-      return Array.isArray(updated) ? updated[0] || null : null;
-    }
-
-    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/obreiros_auth`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(basePayload),
-    });
-
-    if (!insertRes.ok) {
-      const body = await insertRes.text().catch(() => "");
-      throw new Error(body || "Falha ao criar obreiro_auth.");
-    }
-
-    const inserted = await insertRes.json().catch(() => []);
-    return Array.isArray(inserted) ? inserted[0] || null : null;
+    const identity = getObreiroAuthIdentity(row);
+    return saveObreiroAuthRowApi(SUPABASE_URL, identity, patch);
   };
 
   const upsertObreiroAuthStatus = async (row: Record<string, string>, targetStatus: "BLOQUEADO" | "AUTORIZADO") => {
