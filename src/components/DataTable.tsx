@@ -10,6 +10,16 @@ import { DataTableActionMenu } from "@/components/DataTableActionMenu";
 import { DataTableDetailDialog } from "@/components/DataTableDetailDialog";
 import type { Column, DetailField, RowActionItem } from "@/lib/dataTableTypes";
 import { callLettersWebhookApi, fetchClientLettersConfig, fetchObreirosAuthRows, saveObreiroAuthRowApi } from "@/lib/dataTableApi";
+import {
+  deleteCartaAction,
+  compartilharCartaAction,
+  liberarCartaAction,
+  marcarEnvioAction,
+  moverCartaEnviadaAction,
+  scheduleAutoSendForRows,
+  toggleBloqueioUsuarioAction,
+  toggleLiberacaoAutomaticaAction,
+} from "@/lib/dataTableActions";
 import { toast } from "sonner";
 
 const PAGE_SIZE = 25;
@@ -380,234 +390,60 @@ export function DataTable({
     }
   };
 
+  const actionContext = {
+    resolveRow,
+    callLettersWebhook,
+    applyWebhookResultToRow,
+    upsertObreiroAuthStatus,
+    upsertObreiroAutoRelease,
+    applyRowOverride,
+    applyPhoneOverride,
+    persistAutoSentDocId,
+    onRefetchCache,
+    onDeleteSuccess,
+    setDeletingKey,
+    deleteKey,
+    shareOnWhatsApp,
+    toast,
+  };
+
 
   const liberarCarta = async (row: Record<string, string>) => {
-    const currentRow = resolveRow(row);
-    const docId = getDocId(currentRow);
-    if (isBlocked(currentRow)) {
-      toast.error("Este membro esta bloqueado.");
-      return;
-    }
-    if (isLiberacaoAutomatica(currentRow)) {
-      toast.error("Liberacao automatica ativa para esta carta.");
-      return;
-    }
-    if (getStatusCarta(currentRow) === "LIBERADA") {
-      toast.error("Carta ja liberada.");
-      return;
-    }
-    if (!docId) {
-      toast.error("Documento sem ID.");
-      return;
-    }
-    try {
-      const pastorName = (localStorage.getItem("pastor_name") || "Pastor").trim() || "Pastor";
-      const sendResult = await callLettersWebhook(buildSendLetterPayload(currentRow, "manual", pastorName));
-      applyWebhookResultToRow(currentRow, {
-        ...sendResult,
-        action: sendResult?.action || "send_letter",
-        statusCarta: sendResult?.statusCarta || "LIBERADA",
-        liberadoPor: sendResult?.liberadoPor || pastorName,
-      });
-      toast.success((sendResult?.message || "Carta liberada com sucesso").trim());
-      await onRefetchCache?.();
-    } catch (err: any) {
-      toast.error(err?.message || "Nao foi possivel liberar a carta.");
-    }
+    return liberarCartaAction(row, actionContext);
   };
 
   const marcarEnvio = async (row: Record<string, string>, options?: { skipLiberacaoCheck?: boolean }) => {
-    const currentRow = resolveRow(row);
-    const docId = getDocId(currentRow);
-    if (isBlocked(currentRow)) {
-      toast.error("Este membro esta bloqueado.");
-      return;
-    }
-    if (!options?.skipLiberacaoCheck && !isLiberacaoAutomatica(currentRow) && getStatusCarta(currentRow) !== "LIBERADA") {
-      toast.error("Libere a carta antes de compartilhar.");
-      return;
-    }
-    if (!docId) {
-      toast.error("Documento sem ID.");
-      return;
-    }
-    try {
-      const result = await callLettersWebhook({
-        action: "set_envio",
-        docId,
-        envio: "ENVIADO",
-      });
-      applyWebhookResultToRow(currentRow, {
-        ...result,
-        action: result?.action || "set_envio",
-        envio: result?.envio || "ENVIADO",
-      });
-      toast.success((result?.message || "Carta Enviada Com Sucesso").trim());
-      await onRefetchCache?.();
-    } catch (err: any) {
-      toast.error(err?.message || "Nao foi possivel marcar envio.");
-    }
+    return marcarEnvioAction(row, actionContext, options);
   };
 
   const moverCartaEnviada = async (row: Record<string, string>) => {
-    const currentRow = resolveRow(row);
-    const docId = getDocId(currentRow);
-    if (isBlocked(currentRow)) {
-      toast.error("Este membro esta bloqueado.");
-      return;
-    }
-    if (!isLiberacaoAutomatica(currentRow) && getStatusCarta(currentRow) !== "LIBERADA") {
-      toast.error("Libere a carta antes de mover.");
-      return;
-    }
-    if (!docId) {
-      toast.error("Documento sem ID.");
-      return;
-    }
-    try {
-      const result = await callLettersWebhook({
-        action: "move_sent",
-        docId,
-      });
-      applyWebhookResultToRow(currentRow, {
-        ...result,
-        action: result?.action || "move_sent",
-        driveStatus: result?.driveStatus || "CARTA_ENVIADA",
-      });
-      await onRefetchCache?.();
-    } catch (err: any) {
-      toast.error(err?.message || "Nao foi possivel mover a carta.");
-    }
+    return moverCartaEnviadaAction(row, actionContext);
   };
 
   const compartilharCarta = async (row: Record<string, string>) => {
-    const currentRow = resolveRow(row);
-    if (isBlocked(currentRow)) {
-      toast.error("Este membro esta bloqueado.");
-      return;
-    }
-    shareOnWhatsApp(currentRow);
-    await marcarEnvio(currentRow, { skipLiberacaoCheck: true });
+    return compartilharCartaAction(row, actionContext);
   };
 
   const toggleBloqueioUsuario = async (row: Record<string, string>) => {
-    const currentRow = resolveRow(row);
-    const docId = getDocId(currentRow);
-    const phone = getPhoneDigits(currentRow);
-
-    const targetStatus = isBlocked(currentRow) ? "AUTORIZADO" : "BLOQUEADO";
-    try {
-      const saved = await upsertObreiroAuthStatus(currentRow, targetStatus as "BLOQUEADO" | "AUTORIZADO");
-
-      const nextStatus = String(saved?.status || targetStatus).trim().toUpperCase() || targetStatus;
-
-      if (docId) {
-        applyRowOverride(docId, {
-          obreiro_auth_status: nextStatus,
-          "Status Usuario": nextStatus,
-          statusUsuario: nextStatus,
-          status_usuario: nextStatus,
-          status: nextStatus,
-          __force_blocked: targetStatus === "BLOQUEADO" ? "1" : "0",
-        });
-      }
-
-      if (phone) {
-        applyPhoneOverride(phone, {
-          obreiro_auth_status: nextStatus,
-          "Status Usuario": nextStatus,
-          statusUsuario: nextStatus,
-          status_usuario: nextStatus,
-          status: nextStatus,
-          __force_blocked: targetStatus === "BLOQUEADO" ? "1" : "0",
-        });
-      }
-
-      toast.success(targetStatus === "BLOQUEADO" ? "Usuario bloqueado com sucesso" : "Usuario desbloqueado com sucesso");
-    } catch (err: any) {
-      toast.error(err?.message || "Nao foi possivel atualizar status do usuario.");
-    }
+    return toggleBloqueioUsuarioAction(row, actionContext);
   };
 
   const toggleLiberacaoAutomatica = async (row: Record<string, string>) => {
-    const currentRow = resolveRow(row);
-    const docId = getDocId(currentRow);
-    const phone = getPhoneDigits(currentRow);
-
-    if (!docId && !phone) {
-      toast.error("Registro sem identificador para atualizar liberacao automatica.");
-      return;
-    }
-
-    const next = !isLiberacaoAutomatica(currentRow);
-    try {
-      const saved = await upsertObreiroAutoRelease(currentRow, next);
-
-      const nextStatusCarta = String(saved?.status_carta || (next ? "LIBERADA" : "GERADA")).trim().toUpperCase() || (next ? "LIBERADA" : "GERADA");
-
-      if (docId) {
-        applyRowOverride(docId, {
-          obreiro_auth_status_carta: nextStatusCarta,
-        });
-      }
-
-      if (phone) {
-        applyPhoneOverride(phone, {
-          obreiro_auth_status_carta: nextStatusCarta,
-        });
-      }
-
-      toast.success(next ? "Liberacao automatica ativada" : "Liberacao automatica desativada");
-    } catch (err: any) {
-      toast.error(err?.message || "Nao foi possivel atualizar liberacao automatica.");
-    }
+    return toggleLiberacaoAutomaticaAction(row, actionContext);
   };
 
   useEffect(() => {
     if (!clientConfig) return;
     const rows = data.map((r) => resolveRow(r));
-
-    rows.forEach((row) => {
-      const docId = getDocId(row);
-      if (!docId) return;
-
-      if (getEnvioStatus(row) === "ENVIADO") {
-        persistAutoSentDocId(docId);
-      }
-
-      const isNewRow = !seenDocIdsRef.current.has(docId);
-      if (!isNewRow) return;
-
-      seenDocIdsRef.current.add(docId);
-
-      const blocked = isBlocked(row);
-      const statusCartaOperacional = getStatusCartaOperacional(row);
-      const envio = getEnvioStatus(row);
-
-      if (blocked) return;
-      if (!isAutoReleaseEnabled(row)) return;
-      if (statusCartaOperacional !== "LIBERADA") return;
-      if (envio === "ENVIADO") return;
-      if (autoSentDocIdsRef.current.has(docId)) return;
-      if (autoSendTimersRef.current[docId]) return;
-
-      autoSendTimersRef.current[docId] = window.setTimeout(async () => {
-        try {
-          const result = await callLettersWebhook(buildSendLetterPayload(row, "automatico", "LIBERACAO_AUTOMATICA"));
-          persistAutoSentDocId(docId);
-          applyWebhookResultToRow(row, {
-            ...result,
-            action: result?.action || "send_letter",
-            statusCarta: result?.statusCarta || "LIBERADA",
-          });
-          toast.success(String(result?.message || "Carta enviada automaticamente").trim());
-          await onRefetchCache?.();
-        } catch (err: any) {
-          toast.error(err?.message || "Nao foi possivel enviar carta automaticamente.");
-        } finally {
-          delete autoSendTimersRef.current[docId];
-        }
-      }, 30000);
+    scheduleAutoSendForRows(rows, {
+      callLettersWebhook,
+      applyWebhookResultToRow,
+      persistAutoSentDocId,
+      onRefetchCache,
+      toast,
+      autoSentDocIds: autoSentDocIdsRef.current,
+      seenDocIds: seenDocIdsRef.current,
+      autoSendTimers: autoSendTimersRef.current,
     });
   }, [data, rowOverridesByPhone, rowOverridesByDocId, clientConfig]);
 
@@ -622,33 +458,7 @@ export function DataTable({
     [row.doc_id, row.url_pdf, row.data_emissao, row.nome].map((v) => (v || "").trim()).join("|").toLowerCase();
 
   const deleteCarta = async (row: Record<string, string>) => {
-    const docId = getDocId(resolveRow(row));
-
-    if (!docId) {
-      toast.error("Nao foi possivel excluir. Tente novamente.");
-      return;
-    }
-
-    const confirmDelete = window.confirm("Tem certeza que deseja excluir esta carta?");
-    if (!confirmDelete) return;
-
-    const rowKey = deleteKey(row);
-    setDeletingKey(rowKey);
-
-    try {
-      const result = await callLettersWebhook({
-        action: "delete",
-        docId,
-      });
-
-      toast.success((result?.message || "Carta exclu?da com sucesso").trim());
-      onDeleteSuccess?.(row);
-      await onRefetchCache?.();
-    } catch (err: any) {
-      toast.error(err?.message || "Nao foi possivel excluir. Tente novamente.");
-    } finally {
-      setDeletingKey(null);
-    }
+    return deleteCartaAction(row, actionContext);
   };
 
   return (
