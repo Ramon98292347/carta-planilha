@@ -10,26 +10,18 @@ import { EllipsisVertical, FileText, LogOut, Save, Trash2, UploadCloud } from "l
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
+import {
+  deleteAnnouncement,
+  deleteAnnouncementFromStorage,
+  loadAnnouncements,
+  saveAnnouncement,
+  type Announcement,
+  uploadAnnouncementFile,
+} from "@/lib/divulgacaoApi";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
 const BUCKET = "public_media";
-
-type Announcement = {
-  id: string;
-  client_id: string;
-  title: string;
-  subtitle?: string | null;
-  type: "image" | "video" | "text";
-  media_path?: string | null;
-  video_url?: string | null;
-  link_url?: string | null;
-  start_at?: string | null;
-  end_at?: string | null;
-  is_active: boolean;
-  sort_order: number;
-  created_at?: string | null;
-};
 
 const emptyForm = {
   id: "",
@@ -82,14 +74,7 @@ export default function Divulgacao() {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !clientId) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        select: "*",
-        order: "sort_order.asc,created_at.desc",
-      });
-      params.set("client_id", `eq.${clientId}`);
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/church_announcements?${params.toString()}`, { headers });
-      if (!response.ok) throw new Error("Falha ao carregar anúncios.");
-      const payload = (await response.json().catch(() => [])) as Announcement[];
+      const payload = await loadAnnouncements(SUPABASE_URL, clientId, headers);
       setItems(payload || []);
     } catch (err: any) {
       toast.error(err?.message || "Falha ao carregar anúncios.");
@@ -122,40 +107,16 @@ export default function Divulgacao() {
 
   const uploadFile = async (file: File) => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !clientId) return "";
-    const ext = file.name.split(".").pop()?.toLowerCase() || "png";
-    const path = `clients/${clientId}/announcements/${crypto.randomUUID()}.${ext}`;
-    const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`;
-
     setUploading(true);
     try {
-      const response = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: {
-          ...getSupabaseHeaders({ json: false }),
-          "Content-Type": file.type || "application/octet-stream",
-          "x-upsert": "true",
-        },
-        body: file,
-      });
-      if (!response.ok) throw new Error("Falha ao enviar arquivo.");
-      return path;
+      return await uploadAnnouncementFile(SUPABASE_URL, SUPABASE_ANON_KEY, BUCKET, clientId, file);
     } finally {
       setUploading(false);
     }
   };
 
   const deleteFromStorage = async (path?: string | null) => {
-    if (!path || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-    try {
-      await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`, {
-        method: "DELETE",
-        headers: {
-          ...getSupabaseHeaders({ json: false }),
-        },
-      });
-    } catch {
-      // ignore
-    }
+    return deleteAnnouncementFromStorage(SUPABASE_URL, SUPABASE_ANON_KEY, BUCKET, path);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -213,11 +174,7 @@ export default function Divulgacao() {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
     if (!window.confirm("Remover este anúncio?")) return;
     try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/church_announcements?id=eq.${item.id}`, {
-        method: "DELETE",
-        headers,
-      });
-      if (!response.ok) throw new Error("Não foi possível remover.");
+      await deleteAnnouncement(SUPABASE_URL, item.id, headers);
       await deleteFromStorage(item.media_path);
       toast.success("Anúncio removido.");
       await loadItems();
@@ -477,3 +434,4 @@ export default function Divulgacao() {
     </div>
   );
 }
+
