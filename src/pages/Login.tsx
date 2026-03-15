@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 import { ChurchChoice, clearAppSession, saveAppSession } from "@/lib/appSession";
+import { getFriendlyErrorMessage } from "@/lib/friendlyErrorMessages";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
@@ -150,7 +151,7 @@ export default function Login() {
     if (normalizedCpf.length !== 11 || !password.trim()) return;
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      toast.error("ConfiguraÃ§Ã£o do Supabase ausente.");
+      toast.error("Configuração do Supabase ausente.");
       return;
     }
 
@@ -175,7 +176,10 @@ export default function Login() {
       const result = (await response.json().catch(() => ({}))) as LoginResponse;
 
       if (!response.ok || !result?.ok) {
-        const message = "error" in result ? result.error || result.message || "Falha no login." : "Falha no login.";
+        const rawMessage = "error" in result ? result.error || result.message || "Falha no login." : "Falha no login.";
+        const message = getFriendlyErrorMessage(rawMessage, {
+          fallback: "Não foi possível entrar agora. Tente novamente.",
+        });
         toast.error(message);
         return;
       }
@@ -186,7 +190,7 @@ export default function Login() {
         // mostramos a lista para o usuario e interrompemos aqui.
         setChurchChoices(result.churches || []);
         setChurchChoiceName(result.user.full_name || "");
-        toast.message("UsuÃ¡rio com mais de uma igreja. Falta sÃ³ a etapa final de seleÃ§Ã£o.");
+        toast.message("Seu usuário tem mais de uma igreja vinculada. Falta só a etapa final de seleção.");
         return;
       }
 
@@ -212,7 +216,7 @@ export default function Login() {
 
       navigate("/", { replace: true });
     } catch {
-      toast.error("Erro ao conectar no login.");
+      toast.error("Não foi possível conectar ao login agora.");
     } finally {
       setLoading(false);
     }
@@ -227,7 +231,7 @@ export default function Login() {
     e.preventDefault();
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      toast.error("ConfiguraÃ§Ã£o do Supabase ausente.");
+      toast.error("Configuração do Supabase ausente.");
       return;
     }
 
@@ -264,7 +268,11 @@ export default function Login() {
       });
 
       if (error || !data?.ok) {
-        toast.error(data?.error || error?.message || "NÃ£o foi possÃ­vel enviar a solicitaÃ§Ã£o.");
+        toast.error(
+          getFriendlyErrorMessage(data?.error || error?.message, {
+            fallback: "Não foi possível enviar a solicitação agora.",
+          }),
+        );
         return;
       }
 
@@ -272,7 +280,7 @@ export default function Login() {
       setQuickSignupOpen(false);
       toast.success(data.message || "SolicitaÃ§Ã£o enviada com sucesso.");
     } catch {
-      toast.error("NÃ£o foi possÃ­vel enviar a solicitaÃ§Ã£o.");
+      toast.error("Não foi possível enviar a solicitação agora.");
     } finally {
       setSignupLoading(false);
     }
@@ -537,4 +545,6 @@ export default function Login() {
     </div>
   );
 }
+
+
 

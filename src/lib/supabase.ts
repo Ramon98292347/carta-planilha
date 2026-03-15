@@ -1,4 +1,6 @@
+import { getFriendlyErrorMessage } from "@/lib/friendlyErrorMessages";
 import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
+
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
 
@@ -10,7 +12,7 @@ type InvokeResult<T = any> = {
 const functions = {
   async invoke<T = any>(functionName: string, options?: { body?: unknown }): Promise<InvokeResult<T>> {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      return { data: null, error: new Error("Supabase nÃ£o configurado") };
+      return { data: null, error: new Error("Supabase não configurado.") };
     }
 
     try {
@@ -25,17 +27,19 @@ const functions = {
 
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        const message = (payload as any)?.error || `Function invoke failed (${response.status})`;
+        const rawMessage = (payload as any)?.error || `Function invoke failed (${response.status})`;
+        const message = getFriendlyErrorMessage(rawMessage, {
+          fallback: "Não foi possível concluir a solicitação agora.",
+        });
         return { data: payload, error: new Error(message) };
       }
+
       return { data: payload, error: null };
     } catch (err: any) {
       const rawMessage = err instanceof Error ? err.message : String(err);
-      const lowered = rawMessage.toLowerCase();
-      const message =
-        lowered.includes("failed to fetch") || lowered.includes("connection") || lowered.includes("network")
-          ? "Falha de conexao com as Edge Functions do Supabase."
-          : rawMessage;
+      const message = getFriendlyErrorMessage(rawMessage, {
+        fallback: "Falha de conexão com as funções do sistema.",
+      });
       return { data: null, error: new Error(message) };
     }
   },
