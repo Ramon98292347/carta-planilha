@@ -2,7 +2,7 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import { formatDate, parseDate } from "@/lib/sheets";
 import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 import { EMPTY, buildFormUrl, getDerivedStatusClass, getDerivedStatusLabel, getDocId, getPhoneDigits, getStatusCartaOperacional, getStatusCartaVisual, getStatusUsuario, isAutoReleaseEnabled, isBlockedRow } from "@/lib/dataTableHelpers";
