@@ -2,13 +2,14 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, EllipsisVertical, ExternalLink, Eye, Share2, Trash2 } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { formatDate, parseDate } from "@/lib/sheets";
 import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
-import { EMPTY, buildFormUrl, getDerivedStatusClass, getDerivedStatusLabel, getDocId, getPhoneDigits, getStatusCartaOperacional, getStatusCartaVisual, getStatusUsuario, isAutoReleaseEnabled, isBlockedRow, isImageUrl } from "@/lib/dataTableHelpers";
+import { EMPTY, buildFormUrl, getDerivedStatusClass, getDerivedStatusLabel, getDocId, getPhoneDigits, getStatusCartaOperacional, getStatusCartaVisual, getStatusUsuario, isAutoReleaseEnabled, isBlockedRow } from "@/lib/dataTableHelpers";
 import { buildSendLetterPayload, getEnvioStatus, getObreiroAuthIdentity as resolveObreiroAuthIdentity, parseClientConfig, type ClientLettersConfig, withTechnicalContext } from "@/lib/dataTableLetters";
+import { DataTableActionMenu } from "@/components/DataTableActionMenu";
+import { DataTableDetailDialog } from "@/components/DataTableDetailDialog";
+import type { Column, DetailField, RowActionItem } from "@/lib/dataTableTypes";
 import { toast } from "sonner";
 
 const PAGE_SIZE = 25;
@@ -17,24 +18,6 @@ const BLOCK_FORM_STATUS_FIELD = "entry.1791445451";
 const LETTERS_WEBHOOK_URL = "https://n8n-n8n.ynlng8.easypanel.host/webhook/cartas-novo";
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
-
-interface Column {
-  key: string;
-  label: string;
-  render?: (row: Record<string, string>) => React.ReactNode;
-}
-
-interface DetailField {
-  key: string;
-  label: string;
-}
-
-interface RowActionItem {
-  label: string;
-  onClick: () => void | Promise<void>;
-  disabled?: boolean;
-  destructive?: boolean;
-}
 
 interface Props {
   data: Record<string, string>[];
@@ -204,6 +187,12 @@ export function DataTable({
   const getStatusCarta = (row: Record<string, string>) => getStatusCartaVisual(row);
 
   const isLiberacaoAutomatica = (row: Record<string, string>) => isAutoReleaseEnabled(row);
+
+  const openDetailForRow = (row: Record<string, string>) => {
+    setDetailRow(detailRowResolver ? detailRowResolver(row) : row);
+  };
+
+  const canLiberarCarta = (row: Record<string, string>) => !isBlocked(row) && getStatusCarta(row) !== "LIBERADA";
 
   const fetchClientConfig = async (): Promise<ClientLettersConfig | null> => {
     const clientId = (localStorage.getItem("clientId") || "").trim();
@@ -812,105 +801,45 @@ export function DataTable({
                 )}
                 {showDetails && actionsVariant === "detailsOnly" && (
                   <div className="mt-3">
-                    {getRowActions(row).length === 0 ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(resolveRow(row)) : resolveRow(row))}
-                        className="w-full text-xs border-sky-600 bg-sky-600 text-white hover:bg-sky-700"
-                      >
-                        <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
-                      </Button>
-                    ) : (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" size="sm" className="w-full text-xs border-slate-700 bg-slate-700 text-white hover:bg-slate-800">
-                            <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Acoes
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-[min(18rem,calc(100vw-2rem))]">
-                          <DropdownMenuItem onSelect={() => setDetailRow(detailRowResolver ? detailRowResolver(resolveRow(row)) : resolveRow(row))}>
-                            <Eye className="mr-2 h-3.5 w-3.5" /> Detalhes
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {getRowActions(row).map((item) => (
-                            <DropdownMenuItem
-                              key={item.label}
-                              onSelect={() => {
-                                void item.onClick();
-                              }}
-                              disabled={item.disabled}
-                              className={item.destructive ? "text-rose-700 focus:text-rose-800" : undefined}
-                            >
-                              {item.label}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                    <DataTableActionMenu
+                      row={resolveRow(row)}
+                      variant="detailsOnly"
+                      buttonVariant="outline"
+                      buttonClassName={getRowActions(row).length === 0 ? "text-xs border-sky-600 bg-sky-600 text-white hover:bg-sky-700" : "text-xs border-slate-700 bg-slate-700 text-white hover:bg-slate-800"}
+                      fullWidth
+                      rowActions={getRowActions(row)}
+                      enableDelete={enableDelete}
+                      deleting={deletingKey === deleteKey(row)}
+                      onOpenDetails={() => openDetailForRow(resolveRow(row))}
+                      onToggleBloqueioUsuario={toggleBloqueioUsuario}
+                      onToggleLiberacaoAutomatica={toggleLiberacaoAutomatica}
+                      onLiberarCarta={liberarCarta}
+                      onOpenCartaForm={openCartaForm}
+                      onCompartilharCarta={compartilharCarta}
+                      onDeleteCarta={deleteCarta}
+                    />
                   </div>
                 )}
                 {showDetails && actionsVariant === "full" && (
                   <div className="mt-3">
-                    {(() => {
-                      const currentRow = resolveRow(row);
-                      const blocked = isBlocked(currentRow);
-                      const statusCarta = getStatusCarta(currentRow);
-                      const liberacaoAutomatica = isLiberacaoAutomatica(currentRow);
-                      const envioStatus = getEnvioStatus(currentRow);
-                      const isEnviado = envioStatus === "ENVIADO";
-                      const canLiberar = !blocked && statusCarta !== "LIBERADA";
-                      const canCompartilhar = !blocked;
-                      const deleting = deletingKey === deleteKey(row);
-
-                      return (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm" className="w-full text-xs">
-                              <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Acoes
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-[min(18rem,calc(100vw-2rem))]">
-                            <DropdownMenuItem
-                              onSelect={() => setDetailRow(detailRowResolver ? detailRowResolver(currentRow) : currentRow)}
-                            >
-                              <Eye className="mr-2 h-3.5 w-3.5" /> Detalhes
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => toggleBloqueioUsuario(currentRow)}>{blocked ? "Desbloquear usuario" : "Bloquear usuario"}</DropdownMenuItem>
-                            {!blocked && (
-                              <DropdownMenuItem onSelect={() => toggleLiberacaoAutomatica(currentRow)}>
-                                Liberacao automatica: {liberacaoAutomatica ? "ON" : "OFF"}
-                              </DropdownMenuItem>
-                            )}
-                            {canLiberar && (
-                              <DropdownMenuItem disabled={isEnviado} onSelect={() => liberarCarta(currentRow)}>
-                                Liberar carta
-                              </DropdownMenuItem>
-                            )}
-                            {!blocked && <DropdownMenuItem onSelect={() => openCartaForm(currentRow)}>Carta</DropdownMenuItem>}
-                            {canCompartilhar && (
-                              <DropdownMenuItem disabled={isEnviado} onSelect={() => compartilharCarta(currentRow)}>
-                                <Share2 className="mr-2 h-3.5 w-3.5" /> Compartilhar
-                              </DropdownMenuItem>
-                            )}
-                            {!blocked && liberacaoAutomatica && <DropdownMenuItem disabled>Liberacao automatica</DropdownMenuItem>}
-                            {blocked && <DropdownMenuItem disabled>Este membro esta bloqueado</DropdownMenuItem>}
-                            {enableDelete && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onSelect={() => deleteCarta(currentRow)}
-                                  disabled={deleting}
-                                  className="text-rose-700 focus:text-rose-800"
-                                >
-                                  <Trash2 className="mr-2 h-3.5 w-3.5" /> {deleting ? "Excluindo..." : "Excluir"}
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      );
-                    })()}
+                    <DataTableActionMenu
+                      row={resolveRow(row)}
+                      variant="full"
+                      buttonVariant="outline"
+                      buttonClassName="text-xs"
+                      fullWidth
+                      rowActions={[]}
+                      enableDelete={enableDelete}
+                      deleting={deletingKey === deleteKey(row)}
+                      canLiberarCarta={canLiberarCarta}
+                      onOpenDetails={() => openDetailForRow(resolveRow(row))}
+                      onToggleBloqueioUsuario={toggleBloqueioUsuario}
+                      onToggleLiberacaoAutomatica={toggleLiberacaoAutomatica}
+                      onLiberarCarta={liberarCarta}
+                      onOpenCartaForm={openCartaForm}
+                      onCompartilharCarta={compartilharCarta}
+                      onDeleteCarta={deleteCarta}
+                    />
                   </div>
                 )}
               </div>
@@ -966,98 +895,40 @@ export function DataTable({
                       <TableCell>
 
                         {actionsVariant === "detailsOnly" ? (
-                          getRowActions(row).length === 0 ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setDetailRow(detailRowResolver ? detailRowResolver(resolveRow(row)) : resolveRow(row))}
-                              className="text-xs bg-sky-600 text-white hover:bg-sky-700"
-                            >
-                              <Eye className="mr-1 h-3.5 w-3.5" /> Detalhes
-                            </Button>
-                          ) : (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="text-xs bg-slate-700 text-white hover:bg-slate-800">
-                                  <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Acoes
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-[min(18rem,calc(100vw-2rem))]">
-                                <DropdownMenuItem onSelect={() => setDetailRow(detailRowResolver ? detailRowResolver(resolveRow(row)) : resolveRow(row))}>
-                                  <Eye className="mr-2 h-3.5 w-3.5" /> Detalhes
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                {getRowActions(row).map((item) => (
-                                  <DropdownMenuItem
-                                    key={item.label}
-                                    onSelect={() => {
-                                      void item.onClick();
-                                    }}
-                                    disabled={item.disabled}
-                                    className={item.destructive ? "text-rose-700 focus:text-rose-800" : undefined}
-                                  >
-                                    {item.label}
-                                  </DropdownMenuItem>
-                                ))}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )
+                          <DataTableActionMenu
+                            row={resolveRow(row)}
+                            variant="detailsOnly"
+                            buttonVariant="ghost"
+                            buttonClassName={getRowActions(row).length === 0 ? "text-xs bg-sky-600 text-white hover:bg-sky-700" : "text-xs bg-slate-700 text-white hover:bg-slate-800"}
+                            rowActions={getRowActions(row)}
+                            enableDelete={enableDelete}
+                            deleting={deletingKey === deleteKey(row)}
+                            onOpenDetails={() => openDetailForRow(resolveRow(row))}
+                            onToggleBloqueioUsuario={toggleBloqueioUsuario}
+                            onToggleLiberacaoAutomatica={toggleLiberacaoAutomatica}
+                            onLiberarCarta={liberarCarta}
+                            onOpenCartaForm={openCartaForm}
+                            onCompartilharCarta={compartilharCarta}
+                            onDeleteCarta={deleteCarta}
+                          />
                         ) : (
-                          (() => {
-                            const currentRow = resolveRow(row);
-                            const blocked = isBlocked(currentRow);
-                            const statusCarta = getStatusCarta(currentRow);
-                            const liberacaoAutomatica = isLiberacaoAutomatica(currentRow);
-                            const envioStatus = getEnvioStatus(currentRow);
-                            const isEnviado = envioStatus === "ENVIADO";
-                            const canLiberar = !blocked && statusCarta !== "LIBERADA";
-                            const canCompartilhar = !blocked;
-                            const deleting = deletingKey === deleteKey(row);
-
-                            return (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="text-xs bg-slate-700 text-white hover:bg-slate-800">
-                                    <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Acoes
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-[min(18rem,calc(100vw-2rem))]">
-                                  <DropdownMenuItem
-                                    onSelect={() => setDetailRow(detailRowResolver ? detailRowResolver(currentRow) : currentRow)}
-                                  >
-                                    <Eye className="mr-2 h-3.5 w-3.5" /> Detalhes
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onSelect={() => toggleBloqueioUsuario(currentRow)}>{blocked ? "Desbloquear usuario" : "Bloquear usuario"}</DropdownMenuItem>
-                                  {!blocked && (
-                                    <DropdownMenuItem onSelect={() => toggleLiberacaoAutomatica(currentRow)}>
-                                      Liberacao automatica: {liberacaoAutomatica ? "ON" : "OFF"}
-                                    </DropdownMenuItem>
-                                  )}
-                                  {canLiberar && <DropdownMenuItem disabled={isEnviado} onSelect={() => liberarCarta(currentRow)}>Liberar carta</DropdownMenuItem>}
-                                  {!blocked && <DropdownMenuItem onSelect={() => openCartaForm(currentRow)}>Carta</DropdownMenuItem>}
-                                  {canCompartilhar && (
-                                    <DropdownMenuItem disabled={isEnviado} onSelect={() => compartilharCarta(currentRow)}>
-                                      <Share2 className="mr-2 h-3.5 w-3.5" /> Compartilhar
-                                    </DropdownMenuItem>
-                                  )}
-                                  {!blocked && liberacaoAutomatica && <DropdownMenuItem disabled>Liberacao automatica</DropdownMenuItem>}
-                                  {blocked && <DropdownMenuItem disabled>Este membro esta bloqueado</DropdownMenuItem>}
-                                  {enableDelete && (
-                                    <>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        onSelect={() => deleteCarta(currentRow)}
-                                        disabled={deleting}
-                                        className="text-rose-700 focus:text-rose-800"
-                                      >
-                                        <Trash2 className="mr-2 h-3.5 w-3.5" /> {deleting ? "Excluindo..." : "Excluir"}
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            );
-                          })()
+                          <DataTableActionMenu
+                            row={resolveRow(row)}
+                            variant="full"
+                            buttonVariant="ghost"
+                            buttonClassName="text-xs bg-slate-700 text-white hover:bg-slate-800"
+                            rowActions={[]}
+                            enableDelete={enableDelete}
+                            deleting={deletingKey === deleteKey(row)}
+                            canLiberarCarta={canLiberarCarta}
+                            onOpenDetails={() => openDetailForRow(resolveRow(row))}
+                            onToggleBloqueioUsuario={toggleBloqueioUsuario}
+                            onToggleLiberacaoAutomatica={toggleLiberacaoAutomatica}
+                            onLiberarCarta={liberarCarta}
+                            onOpenCartaForm={openCartaForm}
+                            onCompartilharCarta={compartilharCarta}
+                            onDeleteCarta={deleteCarta}
+                          />
                         )}
                       </TableCell>
                     )}
@@ -1085,70 +956,14 @@ export function DataTable({
         )}
       </div>
 
-      <Dialog open={!!detailRow} onOpenChange={() => setDetailRow(null)}>
-        <DialogContent className="max-h-[80vh] w-[calc(100vw-1rem)] max-w-lg overflow-y-auto p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="font-display">Detalhes do Registro</DialogTitle>
-            <DialogDescription className="sr-only">Visualizacao detalhada dos campos do registro selecionado.</DialogDescription>
-          </DialogHeader>
-          {detailRow && (
-            <div className="space-y-2">
-              {(detailFields
-                ? detailFields
-                : detailsSource === "all"
-                  ? (() => {
-                      const items: DetailField[] = [];
-                      const used = new Set<string>();
-                      columns.forEach((c) => {
-                        if (!isEmptyValue(detailRow[c.key])) {
-                          items.push({ key: c.key, label: c.label });
-                          used.add(c.key);
-                        }
-                      });
-                      Object.keys(detailRow).forEach((key) => {
-                        if (used.has(key)) return;
-                        if (key.startsWith("__col_")) return;
-                        if (isEmptyValue(detailRow[key])) return;
-                        items.push({ key, label: key });
-                      });
-                      return items;
-                    })()
-                  : columns
-                      .map((c) => ({ key: c.key, label: c.label }))
-                      .filter(({ key }) => !isEmptyValue(detailRow[key]))
-              ).map(({ key, label }) => {
-                const value = detailRow[key];
-                return (
-                  <div key={key + label} className="flex gap-2 border-b pb-2 text-sm">
-                    <span className="min-w-[140px] font-medium text-muted-foreground">{label}</span>
-                    <span className="break-all text-foreground">
-                      {value && isImageUrl(value, key) ? (
-                        <div className="flex w-full flex-col gap-2">
-                          <img
-                            src={value}
-                            alt={label}
-                            className="max-h-48 w-full rounded-md border object-cover"
-                            loading="lazy"
-                          />
-                          <a href={value} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary underline">
-                            Abrir imagem <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </div>
-                      ) : value && (value.startsWith("http://") || value.startsWith("https://")) ? (
-                        <a href={value} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary underline">
-                          Abrir link <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : (
-                        isEmptyValue(value) ? EMPTY : value
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <DataTableDetailDialog
+        detailRow={detailRow}
+        onOpenChange={() => setDetailRow(null)}
+        columns={columns}
+        detailFields={detailFields}
+        detailsSource={detailsSource}
+        isEmptyValue={isEmptyValue}
+      />
     </>
   );
 }
