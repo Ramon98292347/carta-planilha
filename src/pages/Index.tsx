@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertCircle, Bell, Building2, CalendarDays, CheckCircle2, Download, FileText, Loader2, LogOut, Phone, Plus, Save, Search, UserCircle2, UserPlus } from "lucide-react";
+import { AlertCircle, Bell, Building2, CalendarDays, CheckCircle2, Download, EllipsisVertical, FileText, Loader2, LogOut, Phone, Plus, Save, Search, UserCircle2, UserPlus } from "lucide-react";
 
 import { useSheetData } from "@/hooks/useSheetData";
 import { MetricCards } from "@/components/MetricCards";
@@ -948,7 +948,7 @@ const Index = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 sm:order-1">
+            <div className="hidden items-center gap-2 sm:order-1 sm:flex">
               {installPrompt && (
                 <Button type="button" variant="outline" onClick={handleInstall} className="gap-1">
                   <Download className="h-4 w-4" /> Instalar app
@@ -983,6 +983,50 @@ const Index = () => {
                   Divulgação
                 </Button>
               )}
+            </div>
+            <div className="flex items-center gap-2 sm:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" className="h-9 w-9 p-0">
+                    <EllipsisVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[min(18rem,calc(100vw-2rem))]">
+                  <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {installPrompt && (
+                    <DropdownMenuItem onSelect={() => void handleInstall()}>
+                      <Download className="mr-2 h-3.5 w-3.5" /> Instalar app
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onSelect={() => setUserDialogOpen(true)}>
+                    <UserPlus className="mr-2 h-3.5 w-3.5" /> Cadastrar usuário
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setChurchDialogOpen(true)}>
+                    <Plus className="mr-2 h-3.5 w-3.5" /> Cadastrar igreja
+                  </DropdownMenuItem>
+                  {userRole === "pastor" && (
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        openLetterDialogForTarget({
+                          id: userId,
+                          nome: userName,
+                          telefone: userPhone,
+                          email: "",
+                          cargo: userMinisterRole,
+                          church_totvs_id: activeTotvsId,
+                        })}
+                    >
+                      <FileText className="mr-2 h-3.5 w-3.5" /> Minha carta
+                    </DropdownMenuItem>
+                  )}
+                  {userRole !== "obreiro" && (
+                    <DropdownMenuItem onSelect={() => navigate("/divulgacao")}>
+                      <Building2 className="mr-2 h-3.5 w-3.5" /> Divulgação
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button type="button" variant="outline" className="relative h-9 w-9 p-0">

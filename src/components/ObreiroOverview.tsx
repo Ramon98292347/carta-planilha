@@ -1,4 +1,4 @@
-import { Bell, CalendarDays, FileText, LogOut, TrendingUp, UserCircle2 } from "lucide-react";
+import { Bell, CalendarDays, EllipsisVertical, FileText, LogOut, TrendingUp, UserCircle2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,23 @@ export function ObreiroOverview({
           <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" className="h-9 w-9 p-0 sm:hidden">
+                  <EllipsisVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[min(18rem,calc(100vw-2rem))]">
+                <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={onOpenLetterDialog} disabled={blocked}>
+                  <FileText className="mr-2 h-3.5 w-3.5" /> Nova carta
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onLogout}>
+                  <LogOut className="mr-2 h-3.5 w-3.5" /> Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button type="button" variant="outline" className="relative h-9 w-9 p-0">
                   <Bell className="h-4 w-4" />
                   {notifications.length > 0 && (
@@ -94,7 +111,7 @@ export function ObreiroOverview({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button type="button" variant="outline" onClick={onLogout} className="gap-1">
+            <Button type="button" variant="outline" onClick={onLogout} className="hidden gap-1 sm:inline-flex">
               <LogOut className="h-4 w-4" /> Sair
             </Button>
           </div>
@@ -131,7 +148,7 @@ export function ObreiroOverview({
             <div>Enviadas: <strong>{stats.enviadas}</strong></div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={onOpenLetterDialog} disabled={blocked}>
+            <Button type="button" className="hidden bg-emerald-600 text-white hover:bg-emerald-700 sm:inline-flex" onClick={onOpenLetterDialog} disabled={blocked}>
               Nova carta
             </Button>
             {blocked && <span className="text-sm text-rose-700">Seu acesso esta bloqueado. Procure o pastor.</span>}

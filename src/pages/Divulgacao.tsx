@@ -6,7 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { FileText, LogOut, Save, Trash2, UploadCloud } from "lucide-react";
+import { EllipsisVertical, FileText, LogOut, Save, Trash2, UploadCloud } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { getSupabaseHeaders } from "@/lib/supabaseHeaders";
 
@@ -242,7 +243,7 @@ export default function Divulgacao() {
               <p className="text-xs text-muted-foreground">Configurações do carrossel</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-2 sm:flex">
             <Button type="button" variant="outline" onClick={() => navigate("/")}>Voltar</Button>
             <Button
               type="button"
@@ -272,6 +273,45 @@ export default function Divulgacao() {
             >
               <LogOut className="h-4 w-4" /> Sair
             </Button>
+          </div>
+          <div className="sm:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" className="h-9 w-9 p-0">
+                  <EllipsisVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[min(16rem,calc(100vw-2rem))]">
+                <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => navigate("/")}>Voltar</DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    [
+                      "session_key",
+                      "clientId",
+                      "church_name",
+                      "pastor_name",
+                      "google_sheet_url",
+                      "google_form_url",
+                      "google_block_form_url",
+                      "google_form_url_folder",
+                      "needs_admin_setup",
+                      "DELETE_API_URL",
+                      "DELETE_API_KEY",
+                      "sheets_dashboard_url",
+                      "user_role",
+                      "obreiro_nome",
+                      "obreiro_telefone",
+                      "obreiro_status",
+                    ].forEach((k) => localStorage.removeItem(k));
+                    navigate("/login", { replace: true });
+                  }}
+                >
+                  <LogOut className="mr-2 h-3.5 w-3.5" /> Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
