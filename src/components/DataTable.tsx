@@ -794,7 +794,7 @@ export function DataTable({
               >
                 <div className="space-y-2">
                   {visibleColumns.map((c, colIdx) => (
-                    <div key={c.key} className="grid grid-cols-[110px_1fr] gap-2 text-sm">
+                    <div key={c.key} className="grid grid-cols-[96px_1fr] gap-2 text-sm sm:grid-cols-[110px_1fr]">
                       <span className="font-medium text-muted-foreground">{c.label}</span>
                       <span className="break-words text-foreground">
                         {c.render ? c.render(resolveRow(row)) : (isEmptyValue(resolveRow(row)[c.key]) ? EMPTY : resolveRow(row)[c.key])}
@@ -828,7 +828,7 @@ export function DataTable({
                             <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Acoes
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuContent align="end" className="w-[min(18rem,calc(100vw-2rem))]">
                           <DropdownMenuItem onSelect={() => setDetailRow(detailRowResolver ? detailRowResolver(resolveRow(row)) : resolveRow(row))}>
                             <Eye className="mr-2 h-3.5 w-3.5" /> Detalhes
                           </DropdownMenuItem>
@@ -870,7 +870,7 @@ export function DataTable({
                               <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Acoes
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-52">
+                          <DropdownMenuContent align="end" className="w-[min(18rem,calc(100vw-2rem))]">
                             <DropdownMenuItem
                               onSelect={() => setDetailRow(detailRowResolver ? detailRowResolver(currentRow) : currentRow)}
                             >
@@ -982,7 +982,7 @@ export function DataTable({
                                   <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Acoes
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-56">
+                              <DropdownMenuContent align="end" className="w-[min(18rem,calc(100vw-2rem))]">
                                 <DropdownMenuItem onSelect={() => setDetailRow(detailRowResolver ? detailRowResolver(resolveRow(row)) : resolveRow(row))}>
                                   <Eye className="mr-2 h-3.5 w-3.5" /> Detalhes
                                 </DropdownMenuItem>
@@ -1021,7 +1021,7 @@ export function DataTable({
                                     <EllipsisVertical className="mr-1 h-3.5 w-3.5" /> Acoes
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuContent align="end" className="w-[min(18rem,calc(100vw-2rem))]">
                                   <DropdownMenuItem
                                     onSelect={() => setDetailRow(detailRowResolver ? detailRowResolver(currentRow) : currentRow)}
                                   >
@@ -1086,7 +1086,7 @@ export function DataTable({
       </div>
 
       <Dialog open={!!detailRow} onOpenChange={() => setDetailRow(null)}>
-        <DialogContent className="max-h-[80vh] max-w-lg overflow-y-auto">
+        <DialogContent className="max-h-[80vh] w-[calc(100vw-1rem)] max-w-lg overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="font-display">Detalhes do Registro</DialogTitle>
             <DialogDescription className="sr-only">Visualizacao detalhada dos campos do registro selecionado.</DialogDescription>
